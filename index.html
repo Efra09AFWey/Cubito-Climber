@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cubito Climber</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        body {
+            font-family: 'Press Start 2P', monospace;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+        .pixel-border {
+            box-shadow: 0 0 0 4px #1f2937, 0 0 0 8px #374151;
+        }
+        .pixel-btn {
+            transition: transform 0.1s ease, background-color 0.1s ease;
+        }
+        .pixel-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex flex-col justify-between items-center relative overflow-hidden">
+
+    <!-- FIREBASE CLOUD BACKEND LOGIC -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { 
+            getFirestore, 
+            collection, 
+            doc, 
+            setDoc, 
+            getDoc, 
+            getDocs, 
+            query 
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBk6oxpBiZ7PU0tyoo9V61ibNtrg83lz7E",
+            authDomain: "cubito-climber.firebaseapp.com",
+            projectId: "cubito-climber",
+            storageBucket: "cubito-climber.firebasestorage.app",
+            messagingSenderId: "513420892990",
+            appId: "1:513420892990:web:c36ff262ac2b67eefaaa6f",
+            measurementId: "G-T6Z7EHDFZR"
+        };
+
+        let app = null;
+        let db = null;
+        window.isRegisteredUser = false;
+        window.activeUsername = '';
+        window.guestUsername = 'Jugador' + Math.floor(10000 + Math.random() * 90000);
+        window.personalBest = 0;
+
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            console.log("Firebase initialized successfully");
+        } catch (e) {
+            console.error("Firebase init error:", e);
+        }
+
+        function hashPassword(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                hash = ((hash << 5) - hash) + str.charCodeAt(i);
+                hash |= 0;
+            }
+            return 'pwd_' + Math.abs(hash);
+        }
+
+        window.loadUserPersonalBest = async function(username) {
+            const savedLocalScore = localStorage.getItem('cubito_pb_' + username);
+            if (savedLocalScore) {
+                window.personalBest = parseInt(savedLocalScore) || 0;
+            }
+
+            if (!db) return;
+            try {
+                const cleanKey = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                const userDocRef = doc(db, 'users', cleanKey);
+                const docSnap = await getDoc(userDocRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    if (data.highScore !== undefined && data.highScore > window.personalBest) {
+                        window.personalBest = data.highScore;
+                        localStorage.setItem('cubito_pb_' + username, window.personalBest);
+                    }
+                }
+            } catch (e) {
+                console.error("Error loading user progress:", e);
+            }
+            if (window.updatePlayerBadgeUI) window.updatePlayerBadgeUI();
+        };
+
+        window.saveNewRecordIfHigher = async function(score, seed) {
+            if (score > window.personalBest) {
+                window.personalBest = score;
+                const activeKey = window.isRegisteredUser ? window.activeUsername : window.guestUsername;
+                localStorage.setItem('cubito_pb_' + activeKey, window.personalBest);
+                if (window.updatePlayerBadgeUI) window.updatePlayerBadgeUI();
+            }
+
+            if (!db) return;
+            
+            const displayName = window.isRegisteredUser ? window.activeUsername : window.guestUsername;
+            const docKey = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '');
+
+            try {
+                if (window.isRegisteredUser) {
+                    const userRef = doc(db, 'users', docKey);
+                    await setDoc(userRef, { highScore: window.personalBest, updatedAt: Date.now() }, { merge: true });
+                }
+
+                const lbDocRef = doc(db, 'leaderboard', docKey);
+                await setDoc(lbDocRef, {
+                    name: displayName,
+                    score: window.personalBest,
+                    seed: String(seed),
+                    timestamp: Date.now()
+                }, { merge: true });
+            } catch (e) {
+                console.error("Error saving leaderboard record:", e);
+            }
+        };
+
+        window.fetchLeaderboardFromCloud = async function() {
+            let records = [];
+            if (!db) return records;
+            try {
+                const scoresRef = collection(db, 'leaderboard');
+                const q = query(scoresRef);
+                const querySnapshot = await getDocs(q);
+                querySnapshot.forEach((docSnap) => {
+                    records.push(docSnap.data());
+                });
+            } catch (err) {
+                console.error("Leaderboard fetch error:", err);
+            }
+            return records;
+        };
+
+        window.cloudAuthLoginOrRegister = async function(rawUsername, password, isRegister) {
+            const cleanKey = rawUsername.toLowerCase().replace(/[^a-z0-9_]/g, '');
+            const passHash = hashPassword(password);
+            if (!db) throw new Error("Base de datos no disponible");
+
+            const userDocRef = doc(db, 'users', cleanKey);
+            const docSnap = await getDoc(userDocRef);
+
+            if (isRegister) {
+                if (docSnap.exists()) {
+                    throw new Error("El usuario ya existe. Inicia sesión.");
+                }
+                await setDoc(userDocRef, {
+                    username: rawUsername,
+                    passwordHash: passHash,
+                    highScore: 0,
+                    createdAt: Date.now()
+                });
+            } else {
+                if (!docSnap.exists()) {
+                    throw new Error("El usuario no existe. Regístrate.");
+                }
+                const userData = docSnap.data();
+                if (userData.passwordHash !== passHash) {
+                    throw new Error("Contraseña incorrecta.");
+                }
+            }
+
+            window.activeUsername = rawUsername;
+            window.isRegisteredUser = true;
+            localStorage.setItem('cubito_active_session', JSON.stringify({ username: rawUsername }));
+            await window.loadUserPersonalBest(window.activeUsername);
+            return true;
+        };
+
+        // Restore session on load
+        const savedSession = localStorage.getItem('cubito_active_session');
+        if (savedSession) {
+            try {
+                const parsed = JSON.parse(savedSession);
+                if (parsed.username) {
+                    window.activeUsername = parsed.username;
+                    window.isRegisteredUser = true;
+                    window.loadUserPersonalBest(window.activeUsername);
+                }
+            } catch(e) {}
+        }
+    </script>
+
+    <!-- TOP HUD BAR -->
+    <div id="top-hud" class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-30 pointer-events-auto bg-gradient-to-b from-black/80 to-transparent">
+        <div class="flex gap-3">
+            <div class="bg-gray-900/90 border-2 border-cyan-500 rounded-lg px-3 py-2 text-xs flex flex-col items-center">
+                <span class="text-[9px] text-cyan-300">ALTURA</span>
+                <span id="score-val" class="text-white font-bold text-sm">0m</span>
+            </div>
+            <div class="bg-gray-900/90 border-2 border-yellow-500 rounded-lg px-3 py-2 text-xs flex flex-col items-center">
+                <span class="text-[9px] text-yellow-300">MÁXIMA</span>
+                <span id="record-val" class="text-white font-bold text-sm">0m</span>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <button id="btn-fullscreen" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded-lg border-2 border-indigo-400 text-xs pixel-btn flex items-center justify-center">⛶</button>
+            <button id="btn-open-leaderboard" class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold px-3 py-2 rounded-lg border-2 border-yellow-400 text-xs pixel-btn flex items-center justify-center">🏆</button>
+            <button id="btn-restart-game" class="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-2 rounded-lg border-2 border-red-400 text-xs pixel-btn flex items-center justify-center">🔄</button>
+            <button id="btn-open-pause" class="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-lg border-2 border-gray-600 text-xs pixel-btn flex items-center justify-center">⏸️</button>
+        </div>
+    </div>
+
+    <!-- MAIN GAME CANVAS -->
+    <canvas id="gameCanvas" class="absolute top-0 left-0 w-full h-full z-10"></canvas>
+
+    <!-- TOUCH CONTROLS OVERLAY -->
+    <div id="touch-controls" class="absolute bottom-6 w-full px-6 flex justify-between items-end z-20 pointer-events-none transition-all duration-200">
+        <div class="flex gap-3 pointer-events-auto">
+            <button id="btn-left" class="bg-gray-800/80 hover:bg-gray-700 text-white font-bold p-5 rounded-2xl border-4 border-cyan-500 text-2xl pixel-btn shadow-lg flex items-center justify-center">◀</button>
+            <button id="btn-right" class="bg-gray-800/80 hover:bg-gray-700 text-white font-bold p-5 rounded-2xl border-4 border-cyan-500 text-2xl pixel-btn shadow-lg flex items-center justify-center">▶</button>
+        </div>
+        <div class="pointer-events-auto">
+            <button id="btn-jump" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-8 py-6 rounded-3xl border-4 border-cyan-300 text-xl pixel-btn shadow-2xl flex items-center justify-center">SALTO</button>
+        </div>
+    </div>
+
+    <!-- MAIN MENU SCREEN -->
+    <div id="main-menu" class="absolute inset-0 z-40 bg-gray-950/95 flex flex-col items-center justify-center p-6">
+        <div class="max-w-md w-full bg-gray-900 border-4 border-cyan-500 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
+            <h1 class="text-2xl text-cyan-400 font-bold mb-2 text-center">CUBITO CLIMBER</h1>
+            <p class="text-xs text-gray-400 mb-6 text-center">Escala infinitamente sin caer</p>
+
+            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-4 mb-6 flex justify-between items-center">
+                <div class="flex flex-col">
+                    <span class="text-[10px] text-gray-400">JUGADOR ACTUAL</span>
+                    <span id="user-display-name" class="text-cyan-300 text-xs font-bold mt-1">Jugador...</span>
+                </div>
+                <button id="btn-open-auth" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs border-2 border-indigo-400 pixel-btn">Cuenta</button>
+            </div>
+
+            <div class="w-full flex flex-col gap-3 mb-6">
+                <button id="btn-play-random" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 rounded-xl border-4 border-cyan-400 text-sm pixel-btn shadow-lg">JUEGO ALEATORIO</button>
+                <div class="flex gap-2">
+                    <input type="text" id="input-seed" placeholder="Semilla (opcional)" class="flex-1 bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-500">
+                    <button id="btn-play-seed" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-3 rounded-xl border-4 border-emerald-400 text-xs pixel-btn">IR</button>
+                </div>
+            </div>
+
+            <div class="w-full flex gap-3">
+                <button id="btn-menu-leaderboard" class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl border-2 border-yellow-400 text-xs pixel-btn flex items-center justify-center gap-2">🏆 RANKING</button>
+                <button id="btn-menu-settings" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl border-2 border-gray-500 text-xs pixel-btn flex items-center justify-center gap-2">⚙️ AJUSTES</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GAME OVER SCREEN -->
+    <div id="game-over-screen" class="absolute inset-0 z-40 bg-black/85 flex flex-col items-center justify-center p-6 hidden">
+        <div class="max-w-md w-full bg-gray-900 border-4 border-red-500 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
+            <h2 class="text-2xl text-red-500 font-bold mb-4 text-center">¡HAS CAÍDO!</h2>
+            <div class="w-full bg-gray-800 rounded-xl p-4 mb-4 flex flex-col items-center border-2 border-gray-700">
+                <span class="text-xs text-gray-400 mb-1">ALTURA ALCANZADA</span>
+                <span id="final-score" class="text-3xl text-white font-bold">0m</span>
+                <span class="text-[10px] text-yellow-400 mt-2" id="final-record-msg">¡Nuevo Récord Personal!</span>
+            </div>
+            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-3 mb-6 flex justify-between items-center text-xs">
+                <span class="text-gray-400">SEMILLA:</span>
+                <span id="final-seed-display" class="text-cyan-300 font-mono">---</span>
+                <button id="btn-copy-final-seed" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-[10px]">Copiar</button>
+            </div>
+            <div class="w-full flex flex-col gap-3">
+                <button id="btn-try-again" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl border-4 border-red-400 text-sm pixel-btn shadow-lg">REINTENTAR</button>
+                <button id="btn-back-menu" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl border-2 border-gray-500 text-xs pixel-btn">MENÚ PRINCIPAL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAUSE & SETTINGS MODAL -->
+    <div id="pause-modal" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-6 hidden">
+        <div class="max-w-md w-full bg-gray-900 border-4 border-cyan-500 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
+            <h2 class="text-xl text-cyan-400 font-bold mb-4 text-center">PAUSA / AJUSTES</h2>
+            
+            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-3 mb-4 flex justify-between items-center text-xs">
+                <span class="text-gray-400">SEMILLA:</span>
+                <span id="pause-seed-display" class="text-cyan-300 font-mono">---</span>
+                <button id="btn-copy-pause-seed" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-[10px]">Copiar</button>
+            </div>
+
+            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-4 mb-6 flex flex-col gap-2">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-gray-300">TAMAÑO DE BOTONES TÁCTILES</span>
+                    <span id="btn-scale-val" class="text-cyan-400 font-bold">100%</span>
+                </div>
+                <input type="range" id="btn-scale-slider" min="70" max="140" value="100" class="w-full accent-cyan-500 cursor-pointer">
+            </div>
+
+            <div class="w-full flex flex-col gap-3">
+                <button id="btn-resume" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl border-4 border-cyan-400 text-xs pixel-btn">CONTINUAR</button>
+                <button id="btn-pause-restart" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl border-2 border-yellow-400 text-xs pixel-btn">REINICIAR</button>
+                <button id="btn-pause-menu" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl border-2 border-red-400 text-xs pixel-btn">MENÚ PRINCIPAL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LEADERBOARD MODAL -->
+    <div id="leaderboard-modal" class="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 hidden">
+        <div class="max-w-md w-full h-[80vh] bg-gray-900 border-4 border-yellow-500 rounded-2xl p-6 flex flex-col shadow-2xl">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b-2 border-gray-800">
+                <h2 class="text-lg text-yellow-400 font-bold flex items-center gap-2">🏆 CLASIFICACIÓN GLOBAL</h2>
+                <button id="btn-close-leaderboard" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded-lg text-xs border border-gray-600">✕</button>
+            </div>
+            <div id="leaderboard-list" class="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
+                <div class="text-center text-xs text-gray-400 py-8">Cargando puntuaciones...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ACCOUNT MODAL -->
+    <div id="auth-modal" class="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 hidden">
+        <div class="max-w-md w-full bg-gray-900 border-4 border-indigo-500 rounded-2xl p-6 flex flex-col shadow-2xl relative">
+            <button id="btn-close-auth" class="absolute top-4 right-4 text-gray-400 hover:text-white text-sm">✕</button>
+            <h2 id="auth-title" class="text-lg text-indigo-400 font-bold mb-4 text-center">CREAR CUENTA</h2>
+            
+            <div id="auth-error-msg" class="w-full bg-red-950/80 border-2 border-red-500 text-red-300 text-[10px] p-3 rounded-xl mb-4 hidden text-center"></div>
+
+            <div class="w-full flex flex-col gap-4 mb-6">
+                <div>
+                    <label class="text-[10px] text-gray-400 block mb-1">USUARIO (SIN ESPACIOS)</label>
+                    <input type="text" id="auth-username" class="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-indigo-500" placeholder="Ej. CubitoPro">
+                </div>
+                <div>
+                    <label class="text-[10px] text-gray-400 block mb-1">CONTRASEÑA (MIN 6 CHARS)</label>
+                    <input type="password" id="auth-password" class="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-indigo-500" placeholder="••••••••">
+                </div>
+            </div>
+
+            <button id="btn-submit-auth" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl border-4 border-indigo-400 text-xs pixel-btn mb-4">REGISTRAR</button>
+            
+            <button id="btn-toggle-auth-mode" class="text-[10px] text-indigo-300 hover:underline text-center bg-transparent border-none cursor-pointer w-full">¿Ya tienes cuenta? Inicia sesión aquí</button>
+        </div>
+    </div>
+
+    <!-- GAME ENGINE SCRIPT -->
+    <script>
+        window.addEventListener('load', () => {
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+
+            function resizeCanvas() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+            }
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+            // UI Elements
+            const mainMenu = document.getElementById('main-menu');
+            const gameOverScreen = document.getElementById('game-over-screen');
+            const pauseModal = document.getElementById('pause-modal');
+            const leaderboardModal = document.getElementById('leaderboard-modal');
+            const authModal = document.getElementById('auth-modal');
+            const touchControls = document.getElementById('touch-controls');
+            
+            const scoreValElem = document.getElementById('score-val');
+            const recordValElem = document.getElementById('record-val');
+            const userDisplayNameElem = document.getElementById('user-display-name');
+            const finalScoreElem = document.getElementById('final-score');
+            const finalRecordMsg = document.getElementById('final-record-msg');
+            const finalSeedDisplay = document.getElementById('final-seed-display');
+            const pauseSeedDisplay = document.getElementById('pause-seed-display');
+            const inputSeed = document.getElementById('input-seed');
+            const btnScaleSlider = document.getElementById('btn-scale-slider');
+            const btnScaleVal = document.getElementById('btn-scale-val');
+
+            // PRNG Mulberry32
+            function mulberry32(a) {
+                return function() {
+                    let t = a += 0x6D2B79F5;
+                    t = Math.imul(t ^ t >>> 15, t | 1);
+                    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+                    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+                }
+            }
+
+            let currentSeed = 12345;
+            let rng = mulberry32(currentSeed);
+
+            // Game State
+            let gameState = 'MENU'; // 'MENU', 'PLAYING', 'PAUSED', 'GAMEOVER'
+            let cameraY = 0;
+            let targetCameraY = 0;
+            let maxScoreReached = 0;
+            let startPlatformState = 'safe'; // 'safe', 'fading', 'lethal'
+            let startPlatformFadeTimer = 0;
+
+            const player = {
+                x: 0,
+                y: 0,
+                width: 32,
+                height: 32,
+                vx: 0,
+                vy: 0,
+                speed: 4.5,
+                jumpForce: -11.5,
+                gravity: 0.48,
+                grounded: false
+            };
+
+            let platforms = [];
+            let activeKeys = { left: false, right: false, jump: false };
+
+            window.updatePlayerBadgeUI = function() {
+                if (window.isRegisteredUser && window.activeUsername) {
+                    userDisplayNameElem.innerText = window.activeUsername;
+                } else {
+                    userDisplayNameElem.innerText = window.guestUsername + ' (Invitado)';
+                }
+                recordValElem.innerText = window.personalBest + 'm';
+            };
+            window.updatePlayerBadgeUI();
+
+            function initGame(seedVal) {
+                currentSeed = seedVal ? (isNaN(seedVal) ? hashCode(seedVal) : parseInt(seedVal)) : Math.floor(Math.random() * 999999);
+                rng = mulberry32(currentSeed);
+
+                player.x = canvas.width / 2 - 16;
+                player.y = -60;
+                player.vx = 0;
+                player.vy = 0;
+                player.grounded = false;
+
+                cameraY = 0;
+                targetCameraY = 0;
+                maxScoreReached = 0;
+                startPlatformState = 'safe';
+                startPlatformFadeTimer = 0;
+
+                generateWorld();
+
+                finalSeedDisplay.innerText = currentSeed;
+                pauseSeedDisplay.innerText = currentSeed;
+                scoreValElem.innerText = '0m';
+                recordValElem.innerText = window.personalBest + 'm';
+
+                mainMenu.classList.add('hidden');
+                gameOverScreen.classList.add('hidden');
+                pauseModal.classList.add('hidden');
+                leaderboardModal.classList.add('hidden');
+                authModal.classList.add('hidden');
+                gameState = 'PLAYING';
+            }
+
+            function hashCode(str) {
+                let hash = 0;
+                for (let i = 0; i < str.length; i++) {
+                    hash = (hash << 5) - hash + str.charCodeAt(i);
+                    hash |= 0;
+                }
+                return Math.abs(hash);
+            }
+
+            function generateWorld() {
+                platforms = [];
+                // Start platform spanning full width
+                platforms.push({
+                    x: 0,
+                    y: 0,
+                    width: canvas.width,
+                    height: 24,
+                    type: 'start',
+                    moving: false
+                });
+
+                let currentY = -120;
+                while (currentY > -15000) {
+                    let typeRand = rng();
+                    let width = Math.floor(rng() * 70) + 90;
+                    let x = rng() * (canvas.width - width);
+                    let type = 'normal';
+
+                    let height = 20;
+                    if (typeRand < 0.25) type = 'ramp';
+                    else if (typeRand < 0.45) type = 'cube';
+
+                    let moving = false;
+                    let heightScoreApprox = Math.abs(currentY);
+                    if (heightScoreApprox >= 500 && rng() < 0.35) {
+                        moving = true;
+                    }
+
+                    platforms.push({
+                        x: x,
+                        y: currentY,
+                        width: width,
+                        height: height,
+                        type: type,
+                        moving: moving,
+                        moveSpeed: (rng() * 1.5 + 1) * (rng() < 0.5 ? 1 : -1),
+                        minX: Math.max(0, x - 80),
+                        maxX: Math.min(canvas.width - width, x + 80)
+                    });
+
+                    currentY -= Math.floor(rng() * 70) + 65;
+                }
+            }
+
+            // Game Loop
+            function update() {
+                if (gameState !== 'PLAYING') return;
+
+                // Moving platforms update
+                platforms.forEach(p => {
+                    if (p.moving) {
+                        p.x += p.moveSpeed;
+                        if (p.x <= p.minX || p.x + p.width >= p.maxX || p.x <= 0 || p.x + p.width >= canvas.width) {
+                            p.moveSpeed *= -1;
+                        }
+                    }
+                });
+
+                // Horizontal movement
+                player.vx = 0;
+                if (activeKeys.left) player.vx = -player.speed;
+                if (activeKeys.right) player.vx = player.speed;
+
+                player.x += player.vx;
+                if (player.x < 0) player.x = 0;
+                if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+
+                // Gravity & Vertical movement
+                player.vy += player.gravity;
+                player.y += player.vy;
+
+                // Ground check
+                player.grounded = false;
+
+                platforms.forEach(p => {
+                    if (p.type === 'start') {
+                        // Start platform logic
+                        if (player.vy >= 0 &&
+                            player.x + player.width > p.x &&
+                            player.x < p.x + p.width &&
+                            player.y + player.height >= p.y &&
+                            player.y + player.height - player.vy <= p.y + 8) {
+                            
+                            if (startPlatformState === 'lethal') {
+                                triggerGameOver();
+                            } else {
+                                player.y = p.y - player.height;
+                                player.vy = 0;
+                                player.grounded = true;
+                            }
+                        }
+                    } else {
+                        // Standard platform collision
+                        if (player.vy >= 0 &&
+                            player.x + player.width > p.x &&
+                            player.x < p.x + p.width &&
+                            player.y + player.height >= p.y &&
+                            player.y + player.height - player.vy <= p.y + 10) {
+                            
+                            player.y = p.y - player.height;
+                            player.vy = 0;
+                            player.grounded = true;
+
+                            // If player left start platform and landed on a higher platform, start platform becomes lethal
+                            if (startPlatformState === 'safe') {
+                                startPlatformState = 'fading';
+                                startPlatformFadeTimer = Date.now();
+                            }
+                        }
+                    }
+                });
+
+                // Start platform fade check (0.4s)
+                if (startPlatformState === 'fading') {
+                    if (Date.now() - startPlatformFadeTimer > 400) {
+                        startPlatformState = 'lethal';
+                    }
+                }
+
+                // Jump input
+                if (activeKeys.jump && player.grounded) {
+                    player.vy = player.jumpForce;
+                    player.grounded = false;
+                }
+
+                // Score / Height calculation (0m at start platform y=0, going up is positive)
+                let currentHeightMeters = Math.max(0, Math.floor(-player.y / 10));
+                if (currentHeightMeters > maxScoreReached) {
+                    maxScoreReached = currentHeightMeters;
+                    scoreValElem.innerText = maxScoreReached + 'm';
+                }
+
+                // Camera following & Fall tolerance (100 units below view limit)
+                let desiredCameraY = player.y - canvas.height * 0.5;
+                if (desiredCameraY < targetCameraY) {
+                    targetCameraY = desiredCameraY; // Smooth follow upwards
+                } else {
+                    // Allowed to fall down up to 100 units below target before locking
+                    if (player.y - targetCameraY > canvas.height + 100) {
+                        triggerGameOver();
+                    }
+                }
+                cameraY += (targetCameraY - cameraY) * 0.1;
+            }
+
+            function triggerGameOver() {
+                if (gameState === 'GAMEOVER') return;
+                gameState = 'GAMEOVER';
+
+                finalScoreElem.innerText = maxScoreReached + 'm';
+                if (maxScoreReached > window.personalBest) {
+                    window.personalBest = maxScoreReached;
+                    finalRecordMsg.classList.remove('hidden');
+                } else {
+                    finalRecordMsg.classList.add('hidden');
+                }
+
+                if (window.saveNewRecordIfHigher) {
+                    window.saveNewRecordIfHigher(maxScoreReached, currentSeed);
+                }
+
+                gameOverScreen.classList.remove('hidden');
+            }
+
+            function render() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                ctx.save();
+                ctx.translate(0, -cameraY);
+
+                // Draw background grid lines & stars
+                ctx.strokeStyle = '#1e293b';
+                ctx.lineWidth = 1;
+                for (let y = Math.floor(cameraY / 100) * 100 - 200; y < cameraY + canvas.height + 200; y += 100) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(canvas.width, y);
+                    ctx.stroke();
+                }
+
+                // Render platforms
+                platforms.forEach(p => {
+                    if (p.type === 'start') {
+                        if (startPlatformState === 'lethal') {
+                            ctx.fillStyle = '#ef4444'; // Red lethal
+                            ctx.shadowColor = '#ef4444';
+                            ctx.shadowBlur = 15;
+                        } else if (startPlatformState === 'fading') {
+                            // Fade transition color interpolation or reddish tint
+                            ctx.fillStyle = '#f97316'; 
+                        } else {
+                            ctx.fillStyle = '#10b981'; // Safe green
+                        }
+                        ctx.fillRect(p.x, p.y, p.width, p.height);
+                        ctx.shadowBlur = 0;
+                    } else if (p.type === 'ramp') {
+                        ctx.fillStyle = '#3b82f6';
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y + p.height);
+                        ctx.lineTo(p.x + p.width, p.y + p.height);
+                        ctx.lineTo(p.x + p.width / 2, p.y);
+                        ctx.closePath();
+                        ctx.fill();
+                    } else if (p.type === 'cube') {
+                        ctx.fillStyle = '#8b5cf6';
+                        ctx.fillRect(p.x, p.y, p.width, p.height);
+                        ctx.strokeStyle = '#a78bfa';
+                        ctx.strokeRect(p.x, p.y, p.width, p.height);
+                    } else {
+                        ctx.fillStyle = p.moving ? '#06b6d4' : '#64748b';
+                        ctx.fillRect(p.x, p.y, p.width, p.height);
+                    }
+                });
+
+                // Render player cubito
+                ctx.fillStyle = '#06b6d4';
+                ctx.shadowColor = '#06b6d4';
+                ctx.shadowBlur = 10;
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+                ctx.shadowBlur = 0;
+
+                ctx.restore();
+            }
+
+            function gameLoop() {
+                update();
+                render();
+                requestAnimationFrame(gameLoop);
+            }
+            requestAnimationFrame(gameLoop);
+
+            // Controls Events
+            window.addEventListener('keydown', e => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') activeKeys.left = true;
+                if (e.key === 'ArrowRight' || e.key === 'd') activeKeys.right = true;
+                if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w') activeKeys.jump = true;
+            });
+            window.addEventListener('keyup', e => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') activeKeys.left = false;
+                if (e.key === 'ArrowRight' || e.key === 'd') activeKeys.right = false;
+                if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w') activeKeys.jump = false;
+            });
+
+            // Touch Buttons Binding
+            const bindTouchButton = (elemId, keyName) => {
+                const el = document.getElementById(elemId);
+                if (!el) return;
+                el.addEventListener('touchstart', (e) => { e.preventDefault(); activeKeys[keyName] = true; });
+                el.addEventListener('touchend', (e) => { e.preventDefault(); activeKeys[keyName] = false; });
+                el.addEventListener('mousedown', () => { activeKeys[keyName] = true; });
+                el.addEventListener('mouseup', () => { activeKeys[keyName] = false; });
+                el.addEventListener('mouseleave', () => { activeKeys[keyName] = false; });
+            };
+
+            bindTouchButton('btn-left', 'left');
+            bindTouchButton('btn-right', 'right');
+            bindTouchButton('btn-jump', 'jump');
+
+            // UI Button Actions
+            document.getElementById('btn-play-random').addEventListener('click', () => {
+                initGame();
+            });
+
+            document.getElementById('btn-play-seed').addEventListener('click', () => {
+                const seedVal = inputSeed.value.trim();
+                initGame(seedVal ? seedVal : Math.floor(Math.random() * 999999));
+            });
+
+            document.getElementById('btn-restart-game').addEventListener('click', () => {
+                initGame(currentSeed);
+            });
+
+            document.getElementById('btn-try-again').addEventListener('click', () => {
+                initGame(currentSeed);
+            });
+
+            document.getElementById('btn-back-menu').addEventListener('click', () => {
+                gameOverScreen.classList.add('hidden');
+                mainMenu.classList.remove('hidden');
+                gameState = 'MENU';
+            });
+
+            // Pause Modal
+            document.getElementById('btn-open-pause').addEventListener('click', () => {
+                if (gameState !== 'PLAYING') return;
+                gameState = 'PAUSED';
+                pauseSeedDisplay.innerText = currentSeed;
+                pauseModal.classList.remove('hidden');
+            });
+
+            document.getElementById('btn-resume').addEventListener('click', () => {
+                pauseModal.classList.add('hidden');
+                gameState = 'PLAYING';
+            });
+
+            document.getElementById('btn-pause-restart').addEventListener('click', () => {
+                pauseModal.classList.add('hidden');
+                initGame(currentSeed);
+            });
+
+            document.getElementById('btn-pause-menu').addEventListener('click', () => {
+                pauseModal.classList.add('hidden');
+                mainMenu.classList.remove('hidden');
+                gameState = 'MENU';
+            });
+
+            // Copy Seed Buttons
+            const copySeedText = (elemId) => {
+                const text = document.getElementById(elemId).innerText;
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                } catch (err) {}
+                document.body.removeChild(textArea);
+            };
+
+            document.getElementById('btn-copy-final-seed').addEventListener('click', () => copySeedText('final-seed-display'));
+            document.getElementById('btn-copy-pause-seed').addEventListener('click', () => copySeedText('pause-seed-display'));
+
+            // Button Scale Slider
+            btnScaleSlider.addEventListener('input', (e) => {
+                const scaleVal = e.target.value;
+                btnScaleVal.innerText = scaleVal + '%';
+                touchControls.style.transform = `scale(${scaleVal / 100})`;
+            });
+
+            // Leaderboard Modal
+            const openLeaderboardModal = async () => {
+                leaderboardModal.classList.remove('hidden');
+                const listElem = document.getElementById('leaderboard-list');
+                listElem.innerHTML = '<div class="text-center text-xs text-gray-400 py-8">Cargando puntuaciones...</div>';
+                
+                const records = window.fetchLeaderboardFromCloud ? await window.fetchLeaderboardFromCloud() : [];
+                records.sort((a, b) => b.score - a.score);
+
+                if (records.length === 0) {
+                    listElem.innerHTML = '<div class="text-center text-xs text-gray-400 py-8">No hay récords globales aún. ¡Sé el primero!</div>';
+                    return;
+                }
+
+                listElem.innerHTML = '';
+                records.slice(0, 20).forEach((rec, idx) => {
+                    let medal = `#${idx + 1}`;
+                    if (idx === 0) medal = '🥇';
+                    else if (idx === 1) medal = '🥈';
+                    else if (idx === 2) medal = '🥉';
+
+                    const row = document.createElement('div');
+                    row.className = 'bg-gray-800/90 border border-gray-700 rounded-xl p-3 flex justify-between items-center text-xs';
+                    row.innerHTML = `
+                        <div class="flex items-center gap-3">
+                            <span class="font-bold w-6 text-center text-yellow-400">${medal}</span>
+                            <span class="text-white font-medium">${rec.name || 'Anónimo'}</span>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <span class="text-cyan-400 font-bold">${rec.score}m</span>
+                            <span class="text-[9px] text-gray-500 font-mono">Seed: ${rec.seed || '-'}</span>
+                        </div>
+                    `;
+                    listElem.appendChild(row);
+                });
+            };
+
+            document.getElementById('btn-open-leaderboard').addEventListener('click', openLeaderboardModal);
+            document.getElementById('btn-menu-leaderboard').addEventListener('click', openLeaderboardModal);
+            document.getElementById('btn-close-leaderboard').addEventListener('click', () => leaderboardModal.classList.add('hidden'));
+
+            // Settings Menu button
+            document.getElementById('btn-menu-settings').addEventListener('click', () => {
+                if (gameState === 'MENU') {
+                    gameState = 'PAUSED';
+                    pauseSeedDisplay.innerText = '---';
+                    pauseModal.classList.remove('hidden');
+                }
+            });
+
+            // Fullscreen Toggle Logic
+            const btnFullscreen = document.getElementById('btn-fullscreen');
+            
+            function toggleFullscreen() {
+                if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+                    const docEl = document.documentElement;
+                    if (docEl.requestFullscreen) {
+                        docEl.requestFullscreen();
+                    } else if (docEl.webkitRequestFullscreen) {
+                        docEl.webkitRequestFullscreen();
+                    } else if (docEl.msRequestFullscreen) {
+                        docEl.msRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                        document.msExitFullscreen();
+                    }
+                }
+            }
+
+            function updateFullscreenBtnIcon() {
+                if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
+                    btnFullscreen.innerText = '🗗';
+                    btnFullscreen.title = 'Salir de pantalla completa';
+                } else {
+                    btnFullscreen.innerText = '⛶';
+                    btnFullscreen.title = 'Pantalla completa';
+                }
+            }
+
+            if (btnFullscreen) {
+                btnFullscreen.addEventListener('click', toggleFullscreen);
+            }
+
+            document.addEventListener('fullscreenchange', updateFullscreenBtnIcon);
+            document.addEventListener('webkitfullscreenchange', updateFullscreenBtnIcon);
+            document.addEventListener('msfullscreenchange', updateFullscreenBtnIcon);
+
+            // Auth Modal Logic
+            let isRegisterMode = true;
+            const authTitle = document.getElementById('auth-title');
+            const authUsernameInput = document.getElementById('auth-username');
+            const authPasswordInput = document.getElementById('auth-password');
+            const btnSubmitAuth = document.getElementById('btn-submit-auth');
+            const btnToggleAuthMode = document.getElementById('btn-toggle-auth-mode');
+            const authErrorMsg = document.getElementById('auth-error-msg');
+
+            function updateAuthUI() {
+                authTitle.innerText = isRegisterMode ? 'CREAR CUENTA' : 'INICIAR SESIÓN';
+                btnSubmitAuth.innerText = isRegisterMode ? 'REGISTRAR' : 'ENTRAR';
+                btnToggleAuthMode.innerText = isRegisterMode 
+                    ? '¿Ya tienes cuenta? Inicia sesión aquí' 
+                    : '¿No tienes cuenta? Regístrate aquí';
+                authErrorMsg.classList.add('hidden');
+            }
+
+            document.getElementById('btn-open-auth').addEventListener('click', () => {
+                isRegisterMode = true;
+                updateAuthUI();
+                authModal.classList.remove('hidden');
+            });
+
+            document.getElementById('btn-close-auth').addEventListener('click', () => {
+                authModal.classList.add('hidden');
+            });
+
+            btnToggleAuthMode.addEventListener('click', () => {
+                isRegisterMode = !isRegisterMode;
+                updateAuthUI();
+            });
+
+            btnSubmitAuth.addEventListener('click', async () => {
+                const username = authUsernameInput.value.trim();
+                const password = authPasswordInput.value.trim();
+
+                if (!username || !password) {
+                    authErrorMsg.innerText = "Escribe usuario y contraseña.";
+                    authErrorMsg.classList.remove('hidden');
+                    return;
+                }
+                if (username.length < 3) {
+                    authErrorMsg.innerText = "El usuario debe tener al menos 3 caracteres.";
+                    authErrorMsg.classList.remove('hidden');
+                    return;
+                }
+                if (password.length < 6) {
+                    authErrorMsg.innerText = "La contraseña debe tener al menos 6 caracteres.";
+                    authErrorMsg.classList.remove('hidden');
+                    return;
+                }
+
+                btnSubmitAuth.disabled = true;
+                btnSubmitAuth.innerText = "Conectando...";
+                authErrorMsg.classList.add('hidden');
+
+                try {
+                    await window.cloudAuthLoginOrRegister(username, password, isRegisterMode);
+                    authModal.classList.add('hidden');
+                    authUsernameInput.value = '';
+                    authPasswordInput.value = '';
+                    window.updatePlayerBadgeUI();
+                } catch (err) {
+                    authErrorMsg.innerText = err.message || "Error al autenticar. Verifica tus datos.";
+                    authErrorMsg.classList.remove('hidden');
+                } finally {
+                    btnSubmitAuth.disabled = false;
+                    btnSubmitAuth.innerText = isRegisterMode ? 'REGISTRAR' : 'ENTRAR';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
