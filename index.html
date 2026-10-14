@@ -4,46 +4,861 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Cubito Climber</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
-        body {
-            font-family: 'Press Start 2P', monospace;
-            touch-action: none;
+
+        * {
+            box-sizing: border-box;
             user-select: none;
             -webkit-user-select: none;
-            background-color: #0b0f19;
-            color: #f3f4f6;
-            overflow: hidden;
+            touch-action: manipulation;
             margin: 0;
             padding: 0;
+            font-family: 'Press Start 2P', cursive, monospace;
         }
-        .pixel-border {
-            box-shadow: 0 0 0 4px #1f2937, 0 0 0 8px #374151;
+
+        body {
+            background-color: #080c14;
+            color: #00ffcc;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        .pixel-btn {
-            transition: transform 0.1s ease, background-color 0.1s ease;
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            max-width: 480px;
+            max-height: 900px;
+            background: #090e1a;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.2);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
-        .pixel-btn:active {
-            transform: scale(0.95);
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background: #080c14;
+        }
+
+        /* HUD Superior */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 6px;
+            padding: 10px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-card {
+            background: rgba(13, 20, 36, 0.9);
+            border: 2px solid #00f0ff;
+            border-radius: 8px;
+            padding: 6px 8px;
+            font-size: 8px;
+            color: #00f0ff;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+            pointer-events: auto;
+            text-transform: uppercase;
+            text-align: center;
+            line-height: 1.4;
+        }
+
+        .hud-card span {
+            font-size: 11px;
+            color: #ffffff;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .hud-card.max {
+            border-color: #ffb700;
+            color: #ffb700;
+            box-shadow: 0 0 10px rgba(255, 183, 0, 0.3);
+        }
+
+        .hud-btns {
+            display: flex;
+            gap: 6px;
+            pointer-events: auto;
+            margin-left: auto;
+        }
+
+        .hud-btn {
+            background: rgba(13, 20, 36, 0.9);
+            border: 2px solid #00f0ff;
+            color: #00f0ff;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+            transition: transform 0.1s;
+        }
+
+        .hud-btn.trophy {
+            border-color: #ffb700;
+            color: #ffb700;
+        }
+
+        .hud-btn.restart {
+            border-color: #ff2a6d;
+            color: #ff2a6d;
+        }
+
+        .hud-btn.pause-btn {
+            border-color: #ffb700;
+            color: #ffb700;
+        }
+
+        .hud-btn:active {
+            transform: scale(0.92);
+        }
+
+        /* Controles Táctiles */
+        #touch-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 110px;
+            display: flex;
+            pointer-events: none;
+            z-index: 10;
+            padding: 0;
+            gap: 2px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .t-btn {
+            background: rgba(0, 240, 255, 0.12);
+            border: 2px solid #00f0ff;
+            border-radius: 12px 12px 0 0;
+            color: #00f0ff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 16px;
+            font-weight: bold;
+            pointer-events: auto;
+            box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.2);
+            transition: background 0.1s;
+            flex: 1;
+            height: 100%;
+        }
+
+        .t-btn:active {
+            background: rgba(0, 240, 255, 0.4);
+        }
+
+        /* Modales */
+        .modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(5, 8, 15, 0.92);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 15px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease-in-out;
+        }
+
+        .modal.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-box {
+            background: #0d1527;
+            border: 3px solid #00f0ff;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 360px;
+            padding: 22px 18px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.3);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-box.gameover-box {
+            border-color: #ff2a6d;
+            box-shadow: 0 0 25px rgba(255, 42, 109, 0.4);
+        }
+
+        .modal-title {
+            font-size: 16px;
+            color: #00f0ff;
+            margin-bottom: 8px;
+            text-align: center;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            line-height: 1.4;
+        }
+
+        .modal-title.gameover-title {
+            color: #ff2a6d;
+            font-size: 15px;
+        }
+
+        .modal-subtitle {
+            font-size: 8px;
+            color: #8fa0c0;
+            margin-bottom: 18px;
+            text-align: center;
+            text-transform: uppercase;
+            line-height: 1.4;
+        }
+
+        /* Botones */
+        .btn-cyan {
+            background: #00f0ff;
+            color: #05080f;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 10px;
+            box-shadow: 0 0 12px rgba(0, 240, 255, 0.4);
+            text-align: center;
+        }
+
+        .btn-yellow {
+            background: #ffb700;
+            color: #05080f;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 10px;
+            box-shadow: 0 0 12px rgba(255, 183, 0, 0.4);
+            text-align: center;
+        }
+
+        .btn-red {
+            background: #ff2a6d;
+            color: #ffffff;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 10px;
+            box-shadow: 0 0 12px rgba(255, 42, 109, 0.4);
+            text-align: center;
+        }
+
+        .btn-purple {
+            background: #6c5ce7;
+            color: #ffffff;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 10px;
+            box-shadow: 0 0 12px rgba(108, 92, 231, 0.4);
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-green {
+            background: #10b981;
+            color: #ffffff;
+            border: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 10px;
+            font-size: 10px;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 10px;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.4);
+            text-align: center;
+        }
+
+        .btn-sec {
+            background: #141f36;
+            color: #cbd5e1;
+            border: 2px solid #233354;
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 9px;
+            cursor: pointer;
+            text-transform: uppercase;
+            margin-top: 10px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-cyan:active, .btn-yellow:active, .btn-red:active, .btn-purple:active, .btn-green:active, .btn-sec:active {
+            transform: scale(0.96);
+        }
+
+        /* Tarjetas */
+        .player-card {
+            background: #080c14;
+            border: 2px solid #233354;
+            border-radius: 10px;
+            padding: 10px 12px;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .player-info-label {
+            font-size: 7px;
+            color: #64748b;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .player-info-name {
+            font-size: 10px;
+            color: #00f0ff;
+        }
+
+        .btn-account-small {
+            background: #6c5ce7;
+            color: #ffffff;
+            border: none;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .sub-card {
+            background: #080c14;
+            border: 2px solid #1e2d4a;
+            border-radius: 12px;
+            padding: 12px;
+            width: 100%;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .sub-card-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            font-size: 8px;
+            color: #8fa0c0;
+        }
+
+        .sub-card-val {
+            font-size: 10px;
+            color: #00f0ff;
+        }
+
+        .btn-copy {
+            background: #233354;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 10px;
+            font-size: 8px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .slider-box {
+            width: 100%;
+            background: #080c14;
+            border: 2px solid #1e2d4a;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 10px;
+        }
+
+        .slider-title {
+            font-size: 8px;
+            color: #8fa0c0;
+            text-transform: uppercase;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        input[type=range] {
+            width: 100%;
+            accent-color: #00f0ff;
+        }
+
+        .seed-row {
+            display: flex;
+            gap: 6px;
+            width: 100%;
+            margin-top: 4px;
+        }
+
+        .input-field {
+            background: #080c14;
+            border: 2px solid #233354;
+            border-radius: 8px;
+            padding: 10px;
+            color: #00f0ff;
+            font-size: 8px;
+            width: 100%;
+            outline: none;
+        }
+
+        .btn-go {
+            background: #10b981;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            padding: 0 14px;
+            font-size: 9px;
+            cursor: pointer;
+            text-transform: uppercase;
+        }
+
+        .input-group {
+            width: 100%;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .input-group label {
+            font-size: 7px;
+            color: #8fa0c0;
+            text-transform: uppercase;
+        }
+
+        .error-msg {
+            color: #ff2a6d;
+            font-size: 8px;
+            margin-bottom: 8px;
+            text-align: center;
+            min-height: 12px;
+            line-height: 1.3;
+        }
+
+        .link-text {
+            font-size: 8px;
+            color: #8fa0c0;
+            text-align: center;
+            margin-top: 10px;
+            cursor: pointer;
+            text-decoration: underline;
+            line-height: 1.4;
+        }
+
+        .leaderboard-list {
+            width: 100%;
+            max-height: 220px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .leaderboard-item {
+            background: #080c14;
+            border: 1px solid #1e2d4a;
+            border-radius: 6px;
+            padding: 8px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 8px;
+        }
+
+        .leaderboard-item-user {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .close-x {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: none;
+            border: none;
+            color: #8fa0c0;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .preview-box {
+            width: 80px;
+            height: 80px;
+            background: #080c14;
+            border: 2px solid #00f0ff;
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            width: 100%;
+            margin-top: 6px;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .emoji-btn {
+            background: #080c14;
+            border: 1px solid #233354;
+            border-radius: 6px;
+            padding: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .emoji-btn.selected {
+            border-color: #00f0ff;
+            background: rgba(0, 240, 255, 0.2);
+        }
+
+        .news-list {
+            width: 100%;
+            max-height: 220px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .news-item {
+            background: #080c14;
+            border: 1px solid #1e2d4a;
+            border-radius: 8px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+        }
+
+        .news-item-title {
+            color: #00f0ff;
+            font-size: 9px;
+            line-height: 1.3;
+        }
+
+        .news-item-date {
+            color: #64748b;
+            font-size: 6px;
+        }
+
+        .news-item-content {
+            color: #cbd5e1;
+            font-size: 8px;
+            line-height: 1.4;
+            white-space: pre-wrap;
+        }
+
+        .news-delete-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: #ff2a6d;
+            border: none;
+            color: #fff;
+            font-size: 7px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            z-index: 5;
         }
     </style>
 </head>
-<body class="w-screen h-screen flex flex-col justify-between items-center relative overflow-hidden">
+<body>
+    <div id="game-container">
+        <!-- HUD Principal -->
+        <div id="hud">
+            <div class="hud-card" id="score-display">ALTURA<br><span id="score-val">0m</span></div>
+            <div class="hud-card max" id="max-score-display">MÁXIMA<br><span id="max-score-val">0m</span></div>
+            <div class="hud-btns">
+                <button class="hud-btn" id="btn-fullscreen" title="Pantalla Completa">⛶</button>
+                <button class="hud-btn trophy" id="hud-open-leaderboard" title="Ranking">🏆</button>
+                <button class="hud-btn restart" id="hud-restart" title="Reiniciar">🔄</button>
+                <button class="hud-btn pause-btn" id="btn-pause" title="Pausa">⏸</button>
+            </div>
+        </div>
 
-    <!-- FIREBASE CLOUD BACKEND LOGIC -->
+        <!-- Canvas del Juego -->
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Controles Táctiles -->
+        <div id="touch-controls">
+            <div class="t-btn" id="btn-left">◀</div>
+            <div class="t-btn" id="btn-right">▶</div>
+            <div class="t-btn" id="btn-jump" style="flex: 1.3; background: rgba(0, 240, 255, 0.25);">SALTO</div>
+        </div>
+
+        <!-- Menú Principal -->
+        <div id="menu-modal" class="modal active">
+            <div class="modal-box">
+                <div class="modal-title">CUBITO<br>CLIMBER</div>
+                <div class="modal-subtitle">Escala infinitamente sin caer</div>
+                
+                <div class="player-card">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <canvas id="menu-cubito-preview" width="28" height="28" style="border-radius: 4px; border: 1px solid #233354;"></canvas>
+                        <div>
+                            <div class="player-info-label">Jugador Actual</div>
+                            <div class="player-info-name" id="player-welcome">Jugador</div>
+                        </div>
+                    </div>
+                    <button class="btn-account-small" id="btn-open-account">Cuenta</button>
+                </div>
+
+                <button class="btn-cyan" id="btn-play">JUEGO ALEATORIO</button>
+                
+                <div class="seed-row">
+                    <input type="text" id="custom-seed-input" class="input-field" placeholder="Semilla (opcional)">
+                    <button class="btn-go" id="btn-seed-go">IR</button>
+                </div>
+
+                <div style="display: flex; gap: 8px; width: 100%; margin-top: 8px;">
+                    <button class="btn-yellow" id="btn-open-leaderboard" style="flex: 1; margin-top: 0;">🏆 RANKING</button>
+                    <button class="btn-purple" id="btn-open-customize" style="flex: 1; margin-top: 0;">🎨 CUBITO</button>
+                </div>
+
+                <div style="display: flex; gap: 8px; width: 100%; margin-top: 6px;">
+                    <button class="btn-green" id="btn-open-news" style="flex: 1; margin-top: 0;">📰 NOTICIAS</button>
+                    <button class="btn-sec" id="btn-open-settings" style="flex: 1; margin-top: 0;">⚙ AJUSTES</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Menú Personalizar Cubito -->
+        <div id="customize-modal" class="modal">
+            <div class="modal-box" style="position: relative;">
+                <button class="close-x" id="close-customize">✕</button>
+                <div class="modal-title" style="font-size: 13px; margin-bottom: 6px;">🎨 PERSONALIZAR</div>
+                
+                <div class="preview-box">
+                    <canvas id="custom-preview-canvas" width="48" height="48"></canvas>
+                </div>
+
+                <div class="input-group">
+                    <label>COLOR DEL CUBITO</label>
+                    <input type="color" id="cubito-color-picker" value="#ffb700" style="width: 100%; height: 36px; border: 2px solid #233354; border-radius: 8px; background: none; cursor: pointer;">
+                </div>
+
+                <div class="input-group">
+                    <label>EMOJI DE BOCA (SOLO EMOJIS)</label>
+                    <input type="text" id="cubito-emoji-input" class="input-field" placeholder="Escribe un emoji..." maxlength="4">
+                </div>
+
+                <div class="player-info-label" style="align-self: flex-start;">Sugeridos:</div>
+                <div class="emoji-grid" id="emoji-grid">
+                    <button class="emoji-btn">😂</button>
+                    <button class="emoji-btn">💧</button>
+                    <button class="emoji-btn">😎</button>
+                    <button class="emoji-btn">😡</button>
+                    <button class="emoji-btn">😮</button>
+                    <button class="emoji-btn">🔥</button>
+                    <button class="emoji-btn">⭐</button>
+                    <button class="emoji-btn">💩</button>
+                    <button class="emoji-btn">💀</button>
+                    <button class="emoji-btn">👑</button>
+                </div>
+
+                <button class="btn-cyan" id="btn-save-custom" style="margin-top: 14px;">GUARDAR CUBITO</button>
+            </div>
+        </div>
+
+        <!-- Menú Pausa -->
+        <div id="pause-modal" class="modal">
+            <div class="modal-box">
+                <div class="modal-title">PAUSA ⧸ AJUSTES</div>
+                
+                <div class="sub-card">
+                    <div class="sub-card-row">
+                        <span>SEMILLA:</span>
+                        <span class="sub-card-val" id="pause-seed-val">774406</span>
+                        <button class="btn-copy" id="btn-copy-seed">Copiar</button>
+                    </div>
+                </div>
+
+                <div class="slider-box">
+                    <div class="slider-title">
+                        <span>TAMAÑO DE BOTONES TÁCTILES</span>
+                        <span id="settings-controls-label" style="color: #00f0ff;">100%</span>
+                    </div>
+                    <input type="range" id="settings-controls-size" min="70" max="140" value="110">
+                </div>
+
+                <button class="btn-cyan" id="btn-resume">CONTINUAR</button>
+                <button class="btn-yellow" id="btn-restart-game">REINICIAR</button>
+                <button class="btn-red" id="btn-main-menu">MENÚ PRINCIPAL</button>
+            </div>
+        </div>
+
+        <!-- Menú Game Over -->
+        <div id="gameover-modal" class="modal">
+            <div class="modal-box gameover-box">
+                <div class="modal-title gameover-title">¡HAS CAÍDO!</div>
+                <div class="modal-subtitle">Caíste al abismo inicial</div>
+                
+                <div class="sub-card" style="text-align: center;">
+                    <div class="player-info-label">ALTURA MÁXIMA</div>
+                    <div id="final-score" style="font-size: 16px; color: #00f0ff; margin-top: 4px;">0m</div>
+                </div>
+
+                <div class="sub-card">
+                    <div class="player-info-label" style="text-align: center;">SEMILLA DE ESTA PARTIDA</div>
+                    <div class="sub-card-row" style="justify-content: center; gap: 10px; margin-top: 4px;">
+                        <span class="sub-card-val" id="gameover-seed-val">1423200</span>
+                        <button class="btn-copy" id="btn-copy-go-seed">📋 Copiar</button>
+                    </div>
+                </div>
+
+                <button class="btn-purple" id="btn-retry-seed">🔄 REPETIR ESTA SEMILLA</button>
+                <button class="btn-red" id="btn-retry-new" style="background: #ff2a6d;">🎲 NUEVA ALEATORIA</button>
+            </div>
+        </div>
+
+        <!-- Menú Cuenta -->
+        <div id="account-modal" class="modal">
+            <div class="modal-box" style="position: relative;">
+                <button class="close-x" id="close-account">✕</button>
+                <div class="modal-title" id="account-title" style="font-size: 13px;">CREAR CUENTA</div>
+                <div class="error-msg" id="account-error"></div>
+
+                <div class="input-group">
+                    <label>USUARIO (SIN ESPACIOS)</label>
+                    <input type="text" id="acc-user" class="input-field" placeholder="Ej. CubitoPro">
+                </div>
+                <div class="input-group">
+                    <label>CONTRASEÑA (MIN 6 CHARS)</label>
+                    <input type="password" id="acc-pass" class="input-field" placeholder="••••••••">
+                </div>
+
+                <button class="btn-cyan" id="btn-submit-auth">REGISTRAR</button>
+                <div class="link-text" id="toggle-auth-mode">¿Ya tienes cuenta? Inicia sesión aquí</div>
+            </div>
+        </div>
+
+        <!-- Menú Ranking -->
+        <div id="leaderboard-modal" class="modal">
+            <div class="modal-box" style="position: relative;">
+                <button class="close-x" id="close-leaderboard">✕</button>
+                <div class="modal-title" style="font-size: 13px; margin-bottom: 8px;">🏆 TOP ESCALADORES</div>
+                <div class="modal-subtitle">Mejores récords mundiales</div>
+                
+                <div class="leaderboard-list" id="leaderboard-container">
+                    <div style="text-align: center; color: #8fa0c0; padding: 15px; font-size: 8px;">Cargando...</div>
+                </div>
+
+                <button class="btn-cyan" id="btn-refresh-lb">ACTUALIZAR</button>
+            </div>
+        </div>
+
+        <!-- Menú Noticias -->
+        <div id="news-modal" class="modal">
+            <div class="modal-box" style="position: relative;">
+                <button class="close-x" id="close-news">✕</button>
+                <div class="modal-title" style="font-size: 13px; margin-bottom: 6px;">📰 NOTICIAS</div>
+                <div class="modal-subtitle">Novedades y Actualizaciones</div>
+                
+                <div class="news-list" id="news-container">
+                    <div style="text-align: center; color: #8fa0c0; padding: 15px; font-size: 8px;">Cargando noticias...</div>
+                </div>
+
+                <!-- Formulario Publicar Noticia (Solo Admin) -->
+                <div id="admin-news-form" style="width: 100%; border-top: 1px solid #233354; padding-top: 10px; margin-top: 6px; display: none;">
+                    <div class="player-info-label" style="color: #10b981; margin-bottom: 6px;">PUBLICAR NOTICIA</div>
+                    <div class="input-group">
+                        <input type="text" id="news-title-input" class="input-field" placeholder="Título de la noticia">
+                    </div>
+                    <div class="input-group">
+                        <textarea id="news-content-input" class="input-field" style="height: 50px; resize: none;" placeholder="Contenido de la noticia..."></textarea>
+                    </div>
+                    <button class="btn-green" id="btn-publish-news" style="margin-top: 4px; padding: 10px;">PUBLICAR</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Menú Ajustes -->
+        <div id="settings-modal" class="modal">
+            <div class="modal-box" style="position: relative;">
+                <button class="close-x" id="close-settings">✕</button>
+                <div class="modal-title" style="font-size: 13px; margin-bottom: 14px;">⚙ AJUSTES</div>
+                
+                <div class="slider-box">
+                    <div class="slider-title">
+                        <span>TAMAÑO DE BOTONES TÁCTILES</span>
+                        <span id="settings-main-controls-label" style="color: #00f0ff;">100%</span>
+                    </div>
+                    <input type="range" id="settings-main-controls-size" min="70" max="140" value="110">
+                </div>
+
+                <button class="btn-red" id="btn-logout" style="margin-top: 10px; display: none;">CERRAR SESIÓN</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { 
-            getFirestore, 
-            collection, 
-            doc, 
-            setDoc, 
-            getDoc, 
-            getDocs, 
-            query 
-        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, limit } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBk6oxpBiZ7PU0tyoo9V61ibNtrg83lz7E",
@@ -55,911 +870,924 @@
             measurementId: "G-T6Z7EHDFZR"
         };
 
-        let app = null;
-        let db = null;
-        window.isRegisteredUser = false;
-        window.activeUsername = '';
-        window.guestUsername = 'Jugador' + Math.floor(10000 + Math.random() * 90000);
-        window.personalBest = 0;
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
-        try {
-            app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            console.log("Firebase initialized successfully");
-        } catch (e) {
-            console.error("Firebase init error:", e);
-        }
-
-        function hashPassword(str) {
-            let hash = 0;
-            for (let i = 0; i < str.length; i++) {
-                hash = ((hash << 5) - hash) + str.charCodeAt(i);
-                hash |= 0;
-            }
-            return 'pwd_' + Math.abs(hash);
-        }
-
-        window.loadUserPersonalBest = async function(username) {
-            const savedLocalScore = localStorage.getItem('cubito_pb_' + username);
-            if (savedLocalScore) {
-                window.personalBest = parseInt(savedLocalScore) || 0;
-            }
-
-            if (!db) return;
-            try {
-                const cleanKey = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                const userDocRef = doc(db, 'users', cleanKey);
-                const docSnap = await getDoc(userDocRef);
-                if (docSnap.exists()) {
-                    const data = docSnap.data();
-                    if (data.highScore !== undefined && data.highScore > window.personalBest) {
-                        window.personalBest = data.highScore;
-                        localStorage.setItem('cubito_pb_' + username, window.personalBest);
-                    }
-                }
-            } catch (e) {
-                console.error("Error loading user progress:", e);
-            }
-            if (window.updatePlayerBadgeUI) window.updatePlayerBadgeUI();
-        };
-
-        window.saveNewRecordIfHigher = async function(score, seed) {
-            if (score > window.personalBest) {
-                window.personalBest = score;
-                const activeKey = window.isRegisteredUser ? window.activeUsername : window.guestUsername;
-                localStorage.setItem('cubito_pb_' + activeKey, window.personalBest);
-                if (window.updatePlayerBadgeUI) window.updatePlayerBadgeUI();
-            }
-
-            if (!db) return;
-            
-            const displayName = window.isRegisteredUser ? window.activeUsername : window.guestUsername;
-            const docKey = displayName.toLowerCase().replace(/[^a-z0-9_]/g, '');
-
-            try {
-                if (window.isRegisteredUser) {
-                    const userRef = doc(db, 'users', docKey);
-                    await setDoc(userRef, { highScore: window.personalBest, updatedAt: Date.now() }, { merge: true });
-                }
-
-                const lbDocRef = doc(db, 'leaderboard', docKey);
-                await setDoc(lbDocRef, {
-                    name: displayName,
-                    score: window.personalBest,
-                    seed: String(seed),
-                    timestamp: Date.now()
-                }, { merge: true });
-            } catch (e) {
-                console.error("Error saving leaderboard record:", e);
-            }
-        };
-
-        window.fetchLeaderboardFromCloud = async function() {
-            let records = [];
-            if (!db) return records;
-            try {
-                const scoresRef = collection(db, 'leaderboard');
-                const q = query(scoresRef);
-                const querySnapshot = await getDocs(q);
-                querySnapshot.forEach((docSnap) => {
-                    records.push(docSnap.data());
-                });
-            } catch (err) {
-                console.error("Leaderboard fetch error:", err);
-            }
-            return records;
-        };
-
-        window.cloudAuthLoginOrRegister = async function(rawUsername, password, isRegister) {
-            const cleanKey = rawUsername.toLowerCase().replace(/[^a-z0-9_]/g, '');
-            const passHash = hashPassword(password);
-            if (!db) throw new Error("Base de datos no disponible");
-
-            const userDocRef = doc(db, 'users', cleanKey);
-            const docSnap = await getDoc(userDocRef);
-
-            if (isRegister) {
-                if (docSnap.exists()) {
-                    throw new Error("El usuario ya existe. Inicia sesión.");
-                }
-                await setDoc(userDocRef, {
-                    username: rawUsername,
-                    passwordHash: passHash,
-                    highScore: 0,
-                    createdAt: Date.now()
-                });
-            } else {
-                if (!docSnap.exists()) {
-                    throw new Error("El usuario no existe. Regístrate.");
-                }
-                const userData = docSnap.data();
-                if (userData.passwordHash !== passHash) {
-                    throw new Error("Contraseña incorrecta.");
-                }
-            }
-
-            window.activeUsername = rawUsername;
-            window.isRegisteredUser = true;
-            localStorage.setItem('cubito_active_session', JSON.stringify({ username: rawUsername }));
-            await window.loadUserPersonalBest(window.activeUsername);
-            return true;
-        };
-
-        // Restore session on load
-        const savedSession = localStorage.getItem('cubito_active_session');
-        if (savedSession) {
-            try {
-                const parsed = JSON.parse(savedSession);
-                if (parsed.username) {
-                    window.activeUsername = parsed.username;
-                    window.isRegisteredUser = true;
-                    window.loadUserPersonalBest(window.activeUsername);
-                }
-            } catch(e) {}
-        }
+        window.db = db;
+        window.firebaseFns = { collection, doc, setDoc, getDoc, getDocs, deleteDoc, query, orderBy, limit };
     </script>
 
-    <!-- TOP HUD BAR -->
-    <div id="top-hud" class="absolute top-0 left-0 w-full p-4 flex justify-between items-center z-30 pointer-events-auto bg-gradient-to-b from-black/80 to-transparent">
-        <div class="flex gap-3">
-            <div class="bg-gray-900/90 border-2 border-cyan-500 rounded-lg px-3 py-2 text-xs flex flex-col items-center">
-                <span class="text-[9px] text-cyan-300">ALTURA</span>
-                <span id="score-val" class="text-white font-bold text-sm">0m</span>
-            </div>
-            <div class="bg-gray-900/90 border-2 border-yellow-500 rounded-lg px-3 py-2 text-xs flex flex-col items-center">
-                <span class="text-[9px] text-yellow-300">MÁXIMA</span>
-                <span id="record-val" class="text-white font-bold text-sm">0m</span>
-            </div>
-        </div>
-        <div class="flex gap-2">
-            <button id="btn-fullscreen" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-3 py-2 rounded-lg border-2 border-indigo-400 text-xs pixel-btn flex items-center justify-center">⛶</button>
-            <button id="btn-open-leaderboard" class="bg-yellow-600 hover:bg-yellow-500 text-white font-bold px-3 py-2 rounded-lg border-2 border-yellow-400 text-xs pixel-btn flex items-center justify-center">🏆</button>
-            <button id="btn-restart-game" class="bg-red-600 hover:bg-red-500 text-white font-bold px-3 py-2 rounded-lg border-2 border-red-400 text-xs pixel-btn flex items-center justify-center">🔄</button>
-            <button id="btn-open-pause" class="bg-gray-800 hover:bg-gray-700 text-white font-bold px-3 py-2 rounded-lg border-2 border-gray-600 text-xs pixel-btn flex items-center justify-center">⏸️</button>
-        </div>
-    </div>
-
-    <!-- MAIN GAME CANVAS -->
-    <canvas id="gameCanvas" class="absolute top-0 left-0 w-full h-full z-10"></canvas>
-
-    <!-- TOUCH CONTROLS OVERLAY -->
-    <div id="touch-controls" class="absolute bottom-6 w-full px-6 flex justify-between items-end z-20 pointer-events-none transition-all duration-200">
-        <div class="flex gap-3 pointer-events-auto">
-            <button id="btn-left" class="bg-gray-800/80 hover:bg-gray-700 text-white font-bold p-5 rounded-2xl border-4 border-cyan-500 text-2xl pixel-btn shadow-lg flex items-center justify-center">◀</button>
-            <button id="btn-right" class="bg-gray-800/80 hover:bg-gray-700 text-white font-bold p-5 rounded-2xl border-4 border-cyan-500 text-2xl pixel-btn shadow-lg flex items-center justify-center">▶</button>
-        </div>
-        <div class="pointer-events-auto">
-            <button id="btn-jump" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-8 py-6 rounded-3xl border-4 border-cyan-300 text-xl pixel-btn shadow-2xl flex items-center justify-center">SALTO</button>
-        </div>
-    </div>
-
-    <!-- MAIN MENU SCREEN -->
-    <div id="main-menu" class="absolute inset-0 z-40 bg-gray-950/95 flex flex-col items-center justify-center p-6">
-        <div class="max-w-md w-full bg-gray-900 border-4 border-cyan-500 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
-            <h1 class="text-2xl text-cyan-400 font-bold mb-2 text-center">CUBITO CLIMBER</h1>
-            <p class="text-xs text-gray-400 mb-6 text-center">Escala infinitamente sin caer</p>
-
-            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-4 mb-6 flex justify-between items-center">
-                <div class="flex flex-col">
-                    <span class="text-[10px] text-gray-400">JUGADOR ACTUAL</span>
-                    <span id="user-display-name" class="text-cyan-300 text-xs font-bold mt-1">Jugador...</span>
-                </div>
-                <button id="btn-open-auth" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-2 rounded-lg text-xs border-2 border-indigo-400 pixel-btn">Cuenta</button>
-            </div>
-
-            <div class="w-full flex flex-col gap-3 mb-6">
-                <button id="btn-play-random" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 rounded-xl border-4 border-cyan-400 text-sm pixel-btn shadow-lg">JUEGO ALEATORIO</button>
-                <div class="flex gap-2">
-                    <input type="text" id="input-seed" placeholder="Semilla (opcional)" class="flex-1 bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-cyan-500">
-                    <button id="btn-play-seed" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-3 rounded-xl border-4 border-emerald-400 text-xs pixel-btn">IR</button>
-                </div>
-            </div>
-
-            <div class="w-full flex gap-3">
-                <button id="btn-menu-leaderboard" class="flex-1 bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl border-2 border-yellow-400 text-xs pixel-btn flex items-center justify-center gap-2">🏆 RANKING</button>
-                <button id="btn-menu-settings" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl border-2 border-gray-500 text-xs pixel-btn flex items-center justify-center gap-2">⚙️ AJUSTES</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- GAME OVER SCREEN -->
-    <div id="game-over-screen" class="absolute inset-0 z-40 bg-black/85 flex flex-col items-center justify-center p-6 hidden">
-        <div class="max-w-md w-full bg-gray-900 border-4 border-red-500 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
-            <h2 class="text-2xl text-red-500 font-bold mb-4 text-center">¡HAS CAÍDO!</h2>
-            <div class="w-full bg-gray-800 rounded-xl p-4 mb-4 flex flex-col items-center border-2 border-gray-700">
-                <span class="text-xs text-gray-400 mb-1">ALTURA ALCANZADA</span>
-                <span id="final-score" class="text-3xl text-white font-bold">0m</span>
-                <span class="text-[10px] text-yellow-400 mt-2" id="final-record-msg">¡Nuevo Récord Personal!</span>
-            </div>
-            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-3 mb-6 flex justify-between items-center text-xs">
-                <span class="text-gray-400">SEMILLA:</span>
-                <span id="final-seed-display" class="text-cyan-300 font-mono">---</span>
-                <button id="btn-copy-final-seed" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-[10px]">Copiar</button>
-            </div>
-            <div class="w-full flex flex-col gap-3">
-                <button id="btn-try-again" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl border-4 border-red-400 text-sm pixel-btn shadow-lg">REINTENTAR</button>
-                <button id="btn-back-menu" class="w-full bg-gray-700 hover:bg-gray-600 text-white font-bold py-3 rounded-xl border-2 border-gray-500 text-xs pixel-btn">MENÚ PRINCIPAL</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- PAUSE & SETTINGS MODAL -->
-    <div id="pause-modal" class="absolute inset-0 z-50 bg-black/80 flex flex-col items-center justify-center p-6 hidden">
-        <div class="max-w-md w-full bg-gray-900 border-4 border-cyan-500 rounded-2xl p-6 flex flex-col items-center shadow-2xl">
-            <h2 class="text-xl text-cyan-400 font-bold mb-4 text-center">PAUSA / AJUSTES</h2>
-            
-            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-3 mb-4 flex justify-between items-center text-xs">
-                <span class="text-gray-400">SEMILLA:</span>
-                <span id="pause-seed-display" class="text-cyan-300 font-mono">---</span>
-                <button id="btn-copy-pause-seed" class="bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded text-[10px]">Copiar</button>
-            </div>
-
-            <div class="w-full bg-gray-800/80 border-2 border-gray-700 rounded-xl p-4 mb-6 flex flex-col gap-2">
-                <div class="flex justify-between items-center text-xs">
-                    <span class="text-gray-300">TAMAÑO DE BOTONES TÁCTILES</span>
-                    <span id="btn-scale-val" class="text-cyan-400 font-bold">100%</span>
-                </div>
-                <input type="range" id="btn-scale-slider" min="70" max="140" value="100" class="w-full accent-cyan-500 cursor-pointer">
-            </div>
-
-            <div class="w-full flex flex-col gap-3">
-                <button id="btn-resume" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-3 rounded-xl border-4 border-cyan-400 text-xs pixel-btn">CONTINUAR</button>
-                <button id="btn-pause-restart" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-3 rounded-xl border-2 border-yellow-400 text-xs pixel-btn">REINICIAR</button>
-                <button id="btn-pause-menu" class="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-3 rounded-xl border-2 border-red-400 text-xs pixel-btn">MENÚ PRINCIPAL</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- LEADERBOARD MODAL -->
-    <div id="leaderboard-modal" class="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 hidden">
-        <div class="max-w-md w-full h-[80vh] bg-gray-900 border-4 border-yellow-500 rounded-2xl p-6 flex flex-col shadow-2xl">
-            <div class="flex justify-between items-center mb-4 pb-2 border-b-2 border-gray-800">
-                <h2 class="text-lg text-yellow-400 font-bold flex items-center gap-2">🏆 CLASIFICACIÓN GLOBAL</h2>
-                <button id="btn-close-leaderboard" class="bg-gray-800 hover:bg-gray-700 text-white px-3 py-1 rounded-lg text-xs border border-gray-600">✕</button>
-            </div>
-            <div id="leaderboard-list" class="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
-                <div class="text-center text-xs text-gray-400 py-8">Cargando puntuaciones...</div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ACCOUNT MODAL -->
-    <div id="auth-modal" class="absolute inset-0 z-50 bg-black/85 flex flex-col items-center justify-center p-6 hidden">
-        <div class="max-w-md w-full bg-gray-900 border-4 border-indigo-500 rounded-2xl p-6 flex flex-col shadow-2xl relative">
-            <button id="btn-close-auth" class="absolute top-4 right-4 text-gray-400 hover:text-white text-sm">✕</button>
-            <h2 id="auth-title" class="text-lg text-indigo-400 font-bold mb-4 text-center">CREAR CUENTA</h2>
-            
-            <div id="auth-error-msg" class="w-full bg-red-950/80 border-2 border-red-500 text-red-300 text-[10px] p-3 rounded-xl mb-4 hidden text-center"></div>
-
-            <div class="w-full flex flex-col gap-4 mb-6">
-                <div>
-                    <label class="text-[10px] text-gray-400 block mb-1">USUARIO (SIN ESPACIOS)</label>
-                    <input type="text" id="auth-username" class="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-indigo-500" placeholder="Ej. CubitoPro">
-                </div>
-                <div>
-                    <label class="text-[10px] text-gray-400 block mb-1">CONTRASEÑA (MIN 6 CHARS)</label>
-                    <input type="password" id="auth-password" class="w-full bg-gray-800 border-2 border-gray-600 rounded-xl px-4 py-3 text-xs text-white focus:outline-none focus:border-indigo-500" placeholder="••••••••">
-                </div>
-            </div>
-
-            <button id="btn-submit-auth" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 rounded-xl border-4 border-indigo-400 text-xs pixel-btn mb-4">REGISTRAR</button>
-            
-            <button id="btn-toggle-auth-mode" class="text-[10px] text-indigo-300 hover:underline text-center bg-transparent border-none cursor-pointer w-full">¿Ya tienes cuenta? Inicia sesión aquí</button>
-        </div>
-    </div>
-
-    <!-- GAME ENGINE SCRIPT -->
     <script>
-        window.addEventListener('load', () => {
-            const canvas = document.getElementById('gameCanvas');
-            const ctx = canvas.getContext('2d');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreValElem = document.getElementById('score-val');
+        const maxScoreValElem = document.getElementById('max-score-val');
 
-            function resizeCanvas() {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        let gameState = 'MENU';
+        let currentSeed = 123456;
+        let rng = () => Math.random();
+
+        let currentUser = null; // null for guest or logged user object { username }
+        let activeAuthMode = 'register';
+        let personalMaxScore = 0;
+
+        // Apariencia del Cubito
+        let cubitoStyle = {
+            color: '#ffb700',
+            emoji: '💧'
+        };
+
+        const availableEmojis = ['😂', '💧', '😎', '😡', '😮', '🔥', '⭐', '💩', '💀', '👑', '🐱', '🤖', '👾', '🚀', '⚡'];
+        const availableColors = ['#ffb700', '#00f0ff', '#ff2a6d', '#6c5ce7', '#10b981', '#3b82f6', '#f97316', '#a855f7', '#e11d48'];
+
+        function getRandomCubeStyle() {
+            const randomColor = availableColors[Math.floor(Math.random() * availableColors.length)];
+            const randomEmoji = availableEmojis[Math.floor(Math.random() * availableEmojis.length)];
+            return { color: randomColor, emoji: randomEmoji };
+        }
+
+        function getGuestUser() {
+            let saved = localStorage.getItem('guest_user');
+            if (!saved) {
+                saved = 'Jugador' + Math.floor(1000 + Math.random() * 9000);
+                localStorage.setItem('guest_user', saved);
             }
-            window.addEventListener('resize', resizeCanvas);
+            return saved;
+        }
+
+        let guestUsername = getGuestUser();
+        document.getElementById('player-welcome').innerText = guestUsername;
+
+        let savedStyle = localStorage.getItem('cubito_style');
+        if (!savedStyle) {
+            cubitoStyle = getRandomCubeStyle();
+            localStorage.setItem('cubito_style', JSON.stringify(cubitoStyle));
+        } else {
+            try { cubitoStyle = JSON.parse(savedStyle); } catch(e){}
+        }
+
+        function drawCubito(context, x, y, size, color, emoji) {
+            context.fillStyle = color;
+            context.fillRect(x, y, size, size);
+
+            context.strokeStyle = '#05080f';
+            context.lineWidth = 2;
+            context.strokeRect(x, y, size, size);
+
+            // Ojos
+            context.fillStyle = '#05080f';
+            let eyeSize = Math.max(2, size / 8);
+            context.fillRect(x + size * 0.25 - eyeSize/2, y + size * 0.3, eyeSize, eyeSize * 1.5);
+            context.fillRect(x + size * 0.75 - eyeSize/2, y + size * 0.3, eyeSize, eyeSize * 1.5);
+
+            // Boca Emoji
+            if (emoji) {
+                context.font = `${Math.floor(size * 0.35)}px sans-serif`;
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                context.fillText(emoji, x + size / 2, y + size * 0.72);
+            }
+        }
+
+        function renderMenuPreview() {
+            let pCanvas = document.getElementById('menu-cubito-preview');
+            if (pCanvas) {
+                let pCtx = pCanvas.getContext('2d');
+                pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+                drawCubito(pCtx, 2, 2, 24, cubitoStyle.color, cubitoStyle.emoji);
+            }
+        }
+        renderMenuPreview();
+
+        function renderCustomPreview() {
+            let cCanvas = document.getElementById('custom-preview-canvas');
+            if (cCanvas) {
+                let cCtx = cCanvas.getContext('2d');
+                cCtx.clearRect(0, 0, cCanvas.width, cCanvas.height);
+                drawCubito(cCtx, 4, 4, 40, cubitoStyle.color, cubitoStyle.emoji);
+            }
+        }
+
+        async function saveUserCustomization() {
+            localStorage.setItem('cubito_style', JSON.stringify(cubitoStyle));
+            renderMenuPreview();
+            if (currentUser && window.db) {
+                try {
+                    const docRef = window.firebaseFns.doc(window.db, "users", currentUser.username);
+                    await window.firebaseFns.setDoc(docRef, { cubito: cubitoStyle }, { merge: true });
+                } catch(e) {
+                    console.error("Error guardando diseño en nube:", e);
+                }
+            }
+        }
+
+        // Variables del Jugador
+        let player = {
+            x: 200,
+            y: 400,
+            width: 28,
+            height: 28,
+            vx: 0,
+            vy: 0,
+            speed: 5.2,
+            jumpForce: -10.5,
+            gravity: 0.5,
+            grounded: false,
+            jumpsLeft: 2,
+            facing: 1
+        };
+
+        let platforms = [];
+        let startPlatform = null;
+        let cameraY = 0;
+        let score = 0;
+        let keys = { left: false, right: false };
+        let jumpRequested = false;
+
+        const platformColors = ['#00f0ff', '#ffb700', '#6c5ce7', '#10b981', '#3b82f6', '#f97316', '#a855f7', '#e11d48'];
+
+        function createPlatform(x, y, typeOverride = null) {
+            let types = ['normal', 'horizontal', 'vertical', 'block', 'wide', 'tall'];
+            let type = typeOverride || types[Math.floor(rng() * types.length)];
+            let width = 80;
+            let height = 16;
+            let vx = 0;
+            let vy = 0;
+            let minX = 10;
+            let maxX = canvas.width - width - 10;
+            let minY = y - 70;
+            let maxY = y + 70;
+
+            if (type === 'wide') {
+                width = 110 + Math.floor(rng() * 45);
+                height = 16;
+            } else if (type === 'block') {
+                width = 36 + Math.floor(rng() * 18);
+                height = width;
+            } else if (type === 'tall') {
+                width = 24 + Math.floor(rng() * 12);
+                height = 55 + Math.floor(rng() * 40);
+            } else if (type === 'horizontal') {
+                width = 70 + Math.floor(rng() * 30);
+                vx = (rng() > 0.5 ? 1 : -1) * (1.2 + rng() * 1.5);
+                minX = 10;
+                maxX = canvas.width - width - 10;
+            } else if (type === 'vertical') {
+                width = 75 + Math.floor(rng() * 25);
+                vy = (rng() > 0.5 ? 1 : -1) * (1 + rng() * 1.2);
+            } else {
+                width = 65 + Math.floor(rng() * 35);
+            }
+
+            let color = platformColors[Math.floor(rng() * platformColors.length)];
+
+            return {
+                x: Math.min(Math.max(x, 10), canvas.width - width - 10),
+                y: y,
+                width: width,
+                height: height,
+                type: type,
+                vx: vx,
+                vy: vy,
+                originY: y,
+                minX: minX,
+                maxX: maxX,
+                minY: minY,
+                maxY: maxY,
+                color: color
+            };
+        }
+
+        function initGame(seedVal) {
+            currentSeed = seedVal || Math.floor(Math.random() * 1000000);
+            rng = mulberry32(currentSeed);
+
+            // Plataforma de inicio de lado a lado
+            startPlatform = {
+                x: 0,
+                y: canvas.height - 70,
+                width: canvas.width,
+                height: 24,
+                type: 'start',
+                color: '#ff2a6d',
+                vx: 0,
+                vy: 0
+            };
+
+            player.x = canvas.width / 2 - 14;
+            player.y = startPlatform.y - player.height - 2;
+            player.vx = 0;
+            player.vy = 0;
+            player.grounded = true;
+            player.jumpsLeft = 2;
+
+            cameraY = 0;
+            score = 0;
+            scoreValElem.innerText = '0m';
+
+            platforms = [startPlatform];
+
+            // Generar plataformas hacia arriba
+            let genY = canvas.height - 150;
+            while (genY > -2000) {
+                let pX = Math.floor(rng() * (canvas.width - 90));
+                platforms.push(createPlatform(pX, genY));
+                genY -= 65 + Math.floor(rng() * 35);
+            }
+
+            document.getElementById('pause-seed-val').innerText = currentSeed;
+            document.getElementById('gameover-seed-val').innerText = currentSeed;
+        }
+
+        function mulberry32(a) {
+            return function() {
+                a |= 0; a = a + 0x6D2B79F5 | 0;
+                let t = imul(a ^ a >>> 15, 1 | a);
+                t = t + imul(t ^ t >>> 7, 61 | t) ^ t;
+                return ((t ^ t >>> 14) >>> 0) / 4294967296;
+            }
+        }
+        function imul(a, b) {
+            let ah = (a >>> 16) & 0xffff;
+            let al = a & 0xffff;
+            let bh = (b >>> 16) & 0xffff;
+            let bl = b & 0xffff;
+            return ((al * bl) + (((ah * bl + al * bh) << 16) >>> 0)|0);
+        }
+
+        function executeJump() {
+            if (gameState !== 'PLAYING') return;
+            if (player.grounded) {
+                player.vy = player.jumpForce;
+                player.grounded = false;
+                player.jumpsLeft = 1; // Ya usó el salto principal, queda 1 en el aire
+            } else if (player.jumpsLeft > 0) {
+                player.vy = player.jumpForce * 0.95;
+                player.jumpsLeft = 0; // Se gastó el doble salto
+            }
+        }
+
+        // Bucle Principal
+        function update() {
+            if (gameState !== 'PLAYING') return;
+
+            // Movimiento horizontal
+            if (keys.left) {
+                player.vx = -player.speed;
+                player.facing = -1;
+            } else if (keys.right) {
+                player.vx = player.speed;
+                player.facing = 1;
+            } else {
+                player.vx *= 0.75;
+            }
+
+            player.x += player.vx;
+
+            // Pantalla infinita lateral
+            if (player.x < -player.width) player.x = canvas.width;
+            if (player.x > canvas.width) player.x = -player.width;
+
+            // Gravedad
+            player.vy += player.gravity;
+            player.y += player.vy;
+
+            // Movimiento de plataformas dinámicas
+            for (let p of platforms) {
+                if (p.vx !== 0) {
+                    p.x += p.vx;
+                    if (p.x <= p.minX || p.x >= p.maxX) p.vx *= -1;
+                }
+                if (p.vy !== 0) {
+                    p.y += p.vy;
+                    if (p.y <= p.minY || p.y >= p.maxY) p.vy *= -1;
+                }
+            }
+
+            // Colisiones con plataformas
+            player.grounded = false;
+
+            if (player.vy >= 0) {
+                for (let p of platforms) {
+                    if (
+                        player.x + player.width > p.x &&
+                        player.x < p.x + p.width &&
+                        player.y + player.height >= p.y &&
+                        player.y + player.height <= p.y + p.height + player.vy + 4
+                    ) {
+                        // Si toca el piso de inicio y ya ha subido o avanzado, muere
+                        if (p.type === 'start') {
+                            if (score > 2 || player.y < startPlatform.y - 40) {
+                                triggerGameOver();
+                                return;
+                            }
+                        }
+
+                        player.y = p.y - player.height;
+                        player.vy = 0;
+                        player.grounded = true;
+                        player.jumpsLeft = 2; // Recargar saltos al tocar plataforma
+
+                        if (p.vx !== 0) player.x += p.vx;
+                        break;
+                    }
+                }
+            }
+
+            // Salto por solicitud
+            if (jumpRequested) {
+                executeJump();
+                jumpRequested = false;
+            }
+
+            // Seguimiento de cámara
+            let targetCameraY = player.y - canvas.height * 0.55;
+            if (targetCameraY < cameraY) {
+                cameraY += (targetCameraY - cameraY) * 0.1;
+            }
+
+            // Puntaje por altura alcanzada
+            let currentHeight = Math.max(0, Math.floor((canvas.height - 100 - player.y) / 10));
+            if (currentHeight > score) {
+                score = currentHeight;
+                scoreValElem.innerText = score + 'm';
+                if (score > personalMaxScore) {
+                    personalMaxScore = score;
+                    maxScoreValElem.innerText = personalMaxScore + 'm';
+                }
+            }
+
+            // Reciclaje de plataformas
+            let highestPlatformY = platforms.length > 0 ? platforms[platforms.length - 1].y : 0;
+            if (highestPlatformY > cameraY - 250) {
+                let topY = highestPlatformY - (65 + Math.floor(rng() * 35));
+                let pX = Math.floor(rng() * (canvas.width - 90));
+                platforms.push(createPlatform(pX, topY));
+            }
+
+            // Muerte si cae por debajo de la pantalla o del piso inicial
+            if (player.y > cameraY + canvas.height + 50) {
+                triggerGameOver();
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = '#080c14';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.translate(0, -cameraY);
+
+            // Rejilla de fondo
+            ctx.strokeStyle = 'rgba(0, 240, 255, 0.04)';
+            ctx.lineWidth = 1;
+            for (let i = -cameraY % 50; i < canvas.height * 5; i += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, cameraY + i);
+                ctx.lineTo(canvas.width, cameraY + i);
+                ctx.stroke();
+            }
+
+            // Dibujar Plataformas
+            for (let p of platforms) {
+                if (p.type === 'start') {
+                    ctx.fillStyle = '#2b0c16';
+                    ctx.fillRect(p.x, p.y, p.width, p.height);
+                    ctx.strokeStyle = '#ff2a6d';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(p.x, p.y, p.width, p.height);
+                    ctx.fillStyle = '#ff2a6d';
+                    ctx.fillRect(p.x, p.y, p.width, 4);
+                } else {
+                    ctx.fillStyle = '#14233c';
+                    ctx.fillRect(p.x, p.y, p.width, p.height);
+
+                    ctx.strokeStyle = p.color || '#00f0ff';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(p.x, p.y, p.width, p.height);
+
+                    ctx.fillStyle = p.color || '#00f0ff';
+                    ctx.fillRect(p.x, p.y, p.width, 3);
+                }
+            }
+
+            // Dibujar Cubito
+            drawCubito(ctx, player.x, player.y, player.width, cubitoStyle.color, cubitoStyle.emoji);
+
+            ctx.restore();
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function triggerGameOver() {
+            gameState = 'GAMEOVER';
+            document.getElementById('final-score').innerText = score + 'm';
+            document.getElementById('gameover-modal').classList.add('active');
+
+            if (score >= 0) {
+                saveScoreToLeaderboard(score);
+            }
+        }
+
+        async function saveScoreToLeaderboard(finalScore) {
+            try {
+                let usernameToSave = currentUser ? currentUser.username : guestUsername;
+                if (!window.db) return;
+
+                const docRef = window.firebaseFns.doc(window.db, "leaderboard", usernameToSave);
+                const snap = await window.firebaseFns.getDoc(docRef);
+                let existingScore = snap.exists() ? (snap.data().score || 0) : 0;
+                
+                if (finalScore >= existingScore) {
+                    await window.firebaseFns.setDoc(docRef, {
+                        username: usernameToSave,
+                        score: finalScore,
+                        cubito: cubitoStyle,
+                        timestamp: Date.now()
+                    });
+                }
+            } catch(e) {
+                console.error("Error guardando récord:", e);
+            }
+        }
+
+        // Asignación de Eventos
+        window.addEventListener('DOMContentLoaded', () => {
             resizeCanvas();
 
-            // UI Elements
-            const mainMenu = document.getElementById('main-menu');
-            const gameOverScreen = document.getElementById('game-over-screen');
-            const pauseModal = document.getElementById('pause-modal');
-            const leaderboardModal = document.getElementById('leaderboard-modal');
-            const authModal = document.getElementById('auth-modal');
-            const touchControls = document.getElementById('touch-controls');
-            
-            const scoreValElem = document.getElementById('score-val');
-            const recordValElem = document.getElementById('record-val');
-            const userDisplayNameElem = document.getElementById('user-display-name');
-            const finalScoreElem = document.getElementById('final-score');
-            const finalRecordMsg = document.getElementById('final-record-msg');
-            const finalSeedDisplay = document.getElementById('final-seed-display');
-            const pauseSeedDisplay = document.getElementById('pause-seed-display');
-            const inputSeed = document.getElementById('input-seed');
-            const btnScaleSlider = document.getElementById('btn-scale-slider');
-            const btnScaleVal = document.getElementById('btn-scale-val');
-
-            // PRNG Mulberry32
-            function mulberry32(a) {
-                return function() {
-                    let t = a += 0x6D2B79F5;
-                    t = Math.imul(t ^ t >>> 15, t | 1);
-                    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-                    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-                }
-            }
-
-            let currentSeed = 12345;
-            let rng = mulberry32(currentSeed);
-
-            // Game State
-            let gameState = 'MENU'; // 'MENU', 'PLAYING', 'PAUSED', 'GAMEOVER'
-            let cameraY = 0;
-            let targetCameraY = 0;
-            let maxScoreReached = 0;
-            let startPlatformState = 'safe'; // 'safe', 'fading', 'lethal'
-            let startPlatformFadeTimer = 0;
-
-            const player = {
-                x: 0,
-                y: 0,
-                width: 32,
-                height: 32,
-                vx: 0,
-                vy: 0,
-                speed: 4.5,
-                jumpForce: -11.5,
-                gravity: 0.48,
-                grounded: false
-            };
-
-            let platforms = [];
-            let activeKeys = { left: false, right: false, jump: false };
-
-            window.updatePlayerBadgeUI = function() {
-                if (window.isRegisteredUser && window.activeUsername) {
-                    userDisplayNameElem.innerText = window.activeUsername;
-                } else {
-                    userDisplayNameElem.innerText = window.guestUsername + ' (Invitado)';
-                }
-                recordValElem.innerText = window.personalBest + 'm';
-            };
-            window.updatePlayerBadgeUI();
-
-            function initGame(seedVal) {
-                currentSeed = seedVal ? (isNaN(seedVal) ? hashCode(seedVal) : parseInt(seedVal)) : Math.floor(Math.random() * 999999);
-                rng = mulberry32(currentSeed);
-
-                player.x = canvas.width / 2 - 16;
-                player.y = -60;
-                player.vx = 0;
-                player.vy = 0;
-                player.grounded = false;
-
-                cameraY = 0;
-                targetCameraY = 0;
-                maxScoreReached = 0;
-                startPlatformState = 'safe';
-                startPlatformFadeTimer = 0;
-
-                generateWorld();
-
-                finalSeedDisplay.innerText = currentSeed;
-                pauseSeedDisplay.innerText = currentSeed;
-                scoreValElem.innerText = '0m';
-                recordValElem.innerText = window.personalBest + 'm';
-
-                mainMenu.classList.add('hidden');
-                gameOverScreen.classList.add('hidden');
-                pauseModal.classList.add('hidden');
-                leaderboardModal.classList.add('hidden');
-                authModal.classList.add('hidden');
+            // Botón Juego Aleatorio
+            document.getElementById('btn-play').addEventListener('click', () => {
+                document.getElementById('menu-modal').classList.remove('active');
+                initGame();
                 gameState = 'PLAYING';
-            }
+            });
+
+            // Semilla Personalizada
+            document.getElementById('btn-seed-go').addEventListener('click', () => {
+                let val = document.getElementById('custom-seed-input').value.trim();
+                let seedNum = parseInt(val);
+                if (isNaN(seedNum)) {
+                    seedNum = Math.abs(hashCode(val || 'cubito'));
+                }
+                document.getElementById('menu-modal').classList.remove('active');
+                initGame(seedNum);
+                gameState = 'PLAYING';
+            });
 
             function hashCode(str) {
                 let hash = 0;
                 for (let i = 0; i < str.length; i++) {
-                    hash = (hash << 5) - hash + str.charCodeAt(i);
+                    hash = ((hash << 5) - hash) + str.charCodeAt(i);
                     hash |= 0;
                 }
-                return Math.abs(hash);
+                return hash;
             }
 
-            function generateWorld() {
-                platforms = [];
-                // Start platform spanning full width
-                platforms.push({
-                    x: 0,
-                    y: 0,
-                    width: canvas.width,
-                    height: 24,
-                    type: 'start',
-                    moving: false
-                });
-
-                let currentY = -120;
-                while (currentY > -15000) {
-                    let typeRand = rng();
-                    let width = Math.floor(rng() * 70) + 90;
-                    let x = rng() * (canvas.width - width);
-                    let type = 'normal';
-
-                    let height = 20;
-                    if (typeRand < 0.25) type = 'ramp';
-                    else if (typeRand < 0.45) type = 'cube';
-
-                    let moving = false;
-                    let heightScoreApprox = Math.abs(currentY);
-                    if (heightScoreApprox >= 500 && rng() < 0.35) {
-                        moving = true;
-                    }
-
-                    platforms.push({
-                        x: x,
-                        y: currentY,
-                        width: width,
-                        height: height,
-                        type: type,
-                        moving: moving,
-                        moveSpeed: (rng() * 1.5 + 1) * (rng() < 0.5 ? 1 : -1),
-                        minX: Math.max(0, x - 80),
-                        maxX: Math.min(canvas.width - width, x + 80)
-                    });
-
-                    currentY -= Math.floor(rng() * 70) + 65;
+            // Botones HUD
+            document.getElementById('btn-pause').addEventListener('click', () => {
+                if (gameState === 'PLAYING') {
+                    gameState = 'PAUSED';
+                    document.getElementById('pause-modal').classList.add('active');
                 }
-            }
-
-            // Game Loop
-            function update() {
-                if (gameState !== 'PLAYING') return;
-
-                // Moving platforms update
-                platforms.forEach(p => {
-                    if (p.moving) {
-                        p.x += p.moveSpeed;
-                        if (p.x <= p.minX || p.x + p.width >= p.maxX || p.x <= 0 || p.x + p.width >= canvas.width) {
-                            p.moveSpeed *= -1;
-                        }
-                    }
-                });
-
-                // Horizontal movement
-                player.vx = 0;
-                if (activeKeys.left) player.vx = -player.speed;
-                if (activeKeys.right) player.vx = player.speed;
-
-                player.x += player.vx;
-                if (player.x < 0) player.x = 0;
-                if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
-
-                // Gravity & Vertical movement
-                player.vy += player.gravity;
-                player.y += player.vy;
-
-                // Ground check
-                player.grounded = false;
-
-                platforms.forEach(p => {
-                    if (p.type === 'start') {
-                        // Start platform logic
-                        if (player.vy >= 0 &&
-                            player.x + player.width > p.x &&
-                            player.x < p.x + p.width &&
-                            player.y + player.height >= p.y &&
-                            player.y + player.height - player.vy <= p.y + 8) {
-                            
-                            if (startPlatformState === 'lethal') {
-                                triggerGameOver();
-                            } else {
-                                player.y = p.y - player.height;
-                                player.vy = 0;
-                                player.grounded = true;
-                            }
-                        }
-                    } else {
-                        // Standard platform collision
-                        if (player.vy >= 0 &&
-                            player.x + player.width > p.x &&
-                            player.x < p.x + p.width &&
-                            player.y + player.height >= p.y &&
-                            player.y + player.height - player.vy <= p.y + 10) {
-                            
-                            player.y = p.y - player.height;
-                            player.vy = 0;
-                            player.grounded = true;
-
-                            // If player left start platform and landed on a higher platform, start platform becomes lethal
-                            if (startPlatformState === 'safe') {
-                                startPlatformState = 'fading';
-                                startPlatformFadeTimer = Date.now();
-                            }
-                        }
-                    }
-                });
-
-                // Start platform fade check (0.4s)
-                if (startPlatformState === 'fading') {
-                    if (Date.now() - startPlatformFadeTimer > 400) {
-                        startPlatformState = 'lethal';
-                    }
-                }
-
-                // Jump input
-                if (activeKeys.jump && player.grounded) {
-                    player.vy = player.jumpForce;
-                    player.grounded = false;
-                }
-
-                // Score / Height calculation (0m at start platform y=0, going up is positive)
-                let currentHeightMeters = Math.max(0, Math.floor(-player.y / 10));
-                if (currentHeightMeters > maxScoreReached) {
-                    maxScoreReached = currentHeightMeters;
-                    scoreValElem.innerText = maxScoreReached + 'm';
-                }
-
-                // Camera following & Fall tolerance (100 units below view limit)
-                let desiredCameraY = player.y - canvas.height * 0.5;
-                if (desiredCameraY < targetCameraY) {
-                    targetCameraY = desiredCameraY; // Smooth follow upwards
-                } else {
-                    // Allowed to fall down up to 100 units below target before locking
-                    if (player.y - targetCameraY > canvas.height + 100) {
-                        triggerGameOver();
-                    }
-                }
-                cameraY += (targetCameraY - cameraY) * 0.1;
-            }
-
-            function triggerGameOver() {
-                if (gameState === 'GAMEOVER') return;
-                gameState = 'GAMEOVER';
-
-                finalScoreElem.innerText = maxScoreReached + 'm';
-                if (maxScoreReached > window.personalBest) {
-                    window.personalBest = maxScoreReached;
-                    finalRecordMsg.classList.remove('hidden');
-                } else {
-                    finalRecordMsg.classList.add('hidden');
-                }
-
-                if (window.saveNewRecordIfHigher) {
-                    window.saveNewRecordIfHigher(maxScoreReached, currentSeed);
-                }
-
-                gameOverScreen.classList.remove('hidden');
-            }
-
-            function render() {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                ctx.save();
-                ctx.translate(0, -cameraY);
-
-                // Draw background grid lines & stars
-                ctx.strokeStyle = '#1e293b';
-                ctx.lineWidth = 1;
-                for (let y = Math.floor(cameraY / 100) * 100 - 200; y < cameraY + canvas.height + 200; y += 100) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(canvas.width, y);
-                    ctx.stroke();
-                }
-
-                // Render platforms
-                platforms.forEach(p => {
-                    if (p.type === 'start') {
-                        if (startPlatformState === 'lethal') {
-                            ctx.fillStyle = '#ef4444'; // Red lethal
-                            ctx.shadowColor = '#ef4444';
-                            ctx.shadowBlur = 15;
-                        } else if (startPlatformState === 'fading') {
-                            // Fade transition color interpolation or reddish tint
-                            ctx.fillStyle = '#f97316'; 
-                        } else {
-                            ctx.fillStyle = '#10b981'; // Safe green
-                        }
-                        ctx.fillRect(p.x, p.y, p.width, p.height);
-                        ctx.shadowBlur = 0;
-                    } else if (p.type === 'ramp') {
-                        ctx.fillStyle = '#3b82f6';
-                        ctx.beginPath();
-                        ctx.moveTo(p.x, p.y + p.height);
-                        ctx.lineTo(p.x + p.width, p.y + p.height);
-                        ctx.lineTo(p.x + p.width / 2, p.y);
-                        ctx.closePath();
-                        ctx.fill();
-                    } else if (p.type === 'cube') {
-                        ctx.fillStyle = '#8b5cf6';
-                        ctx.fillRect(p.x, p.y, p.width, p.height);
-                        ctx.strokeStyle = '#a78bfa';
-                        ctx.strokeRect(p.x, p.y, p.width, p.height);
-                    } else {
-                        ctx.fillStyle = p.moving ? '#06b6d4' : '#64748b';
-                        ctx.fillRect(p.x, p.y, p.width, p.height);
-                    }
-                });
-
-                // Render player cubito
-                ctx.fillStyle = '#06b6d4';
-                ctx.shadowColor = '#06b6d4';
-                ctx.shadowBlur = 10;
-                ctx.fillRect(player.x, player.y, player.width, player.height);
-                ctx.shadowBlur = 0;
-
-                ctx.restore();
-            }
-
-            function gameLoop() {
-                update();
-                render();
-                requestAnimationFrame(gameLoop);
-            }
-            requestAnimationFrame(gameLoop);
-
-            // Controls Events
-            window.addEventListener('keydown', e => {
-                if (e.key === 'ArrowLeft' || e.key === 'a') activeKeys.left = true;
-                if (e.key === 'ArrowRight' || e.key === 'd') activeKeys.right = true;
-                if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w') activeKeys.jump = true;
-            });
-            window.addEventListener('keyup', e => {
-                if (e.key === 'ArrowLeft' || e.key === 'a') activeKeys.left = false;
-                if (e.key === 'ArrowRight' || e.key === 'd') activeKeys.right = false;
-                if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w') activeKeys.jump = false;
             });
 
-            // Touch Buttons Binding
-            const bindTouchButton = (elemId, keyName) => {
-                const el = document.getElementById(elemId);
-                if (!el) return;
-                el.addEventListener('touchstart', (e) => { e.preventDefault(); activeKeys[keyName] = true; });
-                el.addEventListener('touchend', (e) => { e.preventDefault(); activeKeys[keyName] = false; });
-                el.addEventListener('mousedown', () => { activeKeys[keyName] = true; });
-                el.addEventListener('mouseup', () => { activeKeys[keyName] = false; });
-                el.addEventListener('mouseleave', () => { activeKeys[keyName] = false; });
-            };
-
-            bindTouchButton('btn-left', 'left');
-            bindTouchButton('btn-right', 'right');
-            bindTouchButton('btn-jump', 'jump');
-
-            // UI Button Actions
-            document.getElementById('btn-play-random').addEventListener('click', () => {
-                initGame();
-            });
-
-            document.getElementById('btn-play-seed').addEventListener('click', () => {
-                const seedVal = inputSeed.value.trim();
-                initGame(seedVal ? seedVal : Math.floor(Math.random() * 999999));
-            });
-
-            document.getElementById('btn-restart-game').addEventListener('click', () => {
+            document.getElementById('hud-restart').addEventListener('click', () => {
+                document.getElementById('pause-modal').classList.remove('active');
+                document.getElementById('gameover-modal').classList.remove('active');
                 initGame(currentSeed);
-            });
-
-            document.getElementById('btn-try-again').addEventListener('click', () => {
-                initGame(currentSeed);
-            });
-
-            document.getElementById('btn-back-menu').addEventListener('click', () => {
-                gameOverScreen.classList.add('hidden');
-                mainMenu.classList.remove('hidden');
-                gameState = 'MENU';
-            });
-
-            // Pause Modal
-            document.getElementById('btn-open-pause').addEventListener('click', () => {
-                if (gameState !== 'PLAYING') return;
-                gameState = 'PAUSED';
-                pauseSeedDisplay.innerText = currentSeed;
-                pauseModal.classList.remove('hidden');
-            });
-
-            document.getElementById('btn-resume').addEventListener('click', () => {
-                pauseModal.classList.add('hidden');
                 gameState = 'PLAYING';
             });
 
-            document.getElementById('btn-pause-restart').addEventListener('click', () => {
-                pauseModal.classList.add('hidden');
-                initGame(currentSeed);
+            document.getElementById('btn-fullscreen').addEventListener('click', () => {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen().catch(()=>{});
+                } else {
+                    document.exitFullscreen().catch(()=>{});
+                }
             });
 
-            document.getElementById('btn-pause-menu').addEventListener('click', () => {
-                pauseModal.classList.add('hidden');
-                mainMenu.classList.remove('hidden');
-                gameState = 'MENU';
-            });
-
-            // Copy Seed Buttons
-            const copySeedText = (elemId) => {
-                const text = document.getElementById(elemId).innerText;
-                const textArea = document.createElement("textarea");
-                textArea.value = text;
-                document.body.appendChild(textArea);
-                textArea.select();
-                try {
-                    document.execCommand('copy');
-                } catch (err) {}
-                document.body.removeChild(textArea);
+            // Ranking
+            const openLeaderboardFn = async () => {
+                document.getElementById('leaderboard-modal').classList.add('active');
+                await loadLeaderboard();
             };
+            document.getElementById('hud-open-leaderboard').addEventListener('click', openLeaderboardFn);
+            document.getElementById('btn-open-leaderboard').addEventListener('click', openLeaderboardFn);
+            document.getElementById('close-leaderboard').addEventListener('click', () => {
+                document.getElementById('leaderboard-modal').classList.remove('active');
+            });
+            document.getElementById('btn-refresh-lb').addEventListener('click', loadLeaderboard);
 
-            document.getElementById('btn-copy-final-seed').addEventListener('click', () => copySeedText('final-seed-display'));
-            document.getElementById('btn-copy-pause-seed').addEventListener('click', () => copySeedText('pause-seed-display'));
-
-            // Button Scale Slider
-            btnScaleSlider.addEventListener('input', (e) => {
-                const scaleVal = e.target.value;
-                btnScaleVal.innerText = scaleVal + '%';
-                touchControls.style.transform = `scale(${scaleVal / 100})`;
+            // Personalización
+            document.getElementById('btn-open-customize').addEventListener('click', () => {
+                document.getElementById('cubito-color-picker').value = cubitoStyle.color;
+                document.getElementById('cubito-emoji-input').value = cubitoStyle.emoji;
+                renderCustomPreview();
+                document.getElementById('customize-modal').classList.add('active');
+            });
+            document.getElementById('close-customize').addEventListener('click', () => {
+                document.getElementById('customize-modal').classList.remove('active');
             });
 
-            // Leaderboard Modal
-            const openLeaderboardModal = async () => {
-                leaderboardModal.classList.remove('hidden');
-                const listElem = document.getElementById('leaderboard-list');
-                listElem.innerHTML = '<div class="text-center text-xs text-gray-400 py-8">Cargando puntuaciones...</div>';
-                
-                const records = window.fetchLeaderboardFromCloud ? await window.fetchLeaderboardFromCloud() : [];
-                records.sort((a, b) => b.score - a.score);
+            document.getElementById('cubito-color-picker').addEventListener('input', (e) => {
+                cubitoStyle.color = e.target.value;
+                renderCustomPreview();
+            });
 
-                if (records.length === 0) {
-                    listElem.innerHTML = '<div class="text-center text-xs text-gray-400 py-8">No hay récords globales aún. ¡Sé el primero!</div>';
+            const emojiInput = document.getElementById('cubito-emoji-input');
+            emojiInput.addEventListener('input', (e) => {
+                let val = e.target.value;
+                const emojiRegex = /(\p{Extended_Pictographic}|[\uD83C-\uDBFF\uDC00-\uDFFF])+?/gu;
+                let matches = val.match(emojiRegex);
+                if (matches) {
+                    cubitoStyle.emoji = matches[0];
+                    emojiInput.value = cubitoStyle.emoji;
+                } else {
+                    cubitoStyle.emoji = '';
+                    emojiInput.value = '';
+                }
+                renderCustomPreview();
+            });
+
+            document.querySelectorAll('.emoji-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    cubitoStyle.emoji = btn.innerText;
+                    emojiInput.value = btn.innerText;
+                    renderCustomPreview();
+                });
+            });
+
+            document.getElementById('btn-save-custom').addEventListener('click', () => {
+                saveUserCustomization();
+                document.getElementById('customize-modal').classList.remove('active');
+            });
+
+            // Cuenta / Auth
+            document.getElementById('btn-open-account').addEventListener('click', () => {
+                document.getElementById('account-modal').classList.add('active');
+            });
+            document.getElementById('close-account').addEventListener('click', () => {
+                document.getElementById('account-modal').classList.remove('active');
+            });
+
+            // Ajustes y Pausa
+            document.getElementById('btn-open-settings').addEventListener('click', () => {
+                document.getElementById('settings-modal').classList.add('active');
+            });
+            document.getElementById('close-settings').addEventListener('click', () => {
+                document.getElementById('settings-modal').classList.remove('active');
+            });
+
+            document.getElementById('btn-resume').addEventListener('click', () => {
+                document.getElementById('pause-modal').classList.remove('active');
+                gameState = 'PLAYING';
+            });
+            document.getElementById('btn-restart-game').addEventListener('click', () => {
+                document.getElementById('pause-modal').classList.remove('active');
+                initGame(currentSeed);
+                gameState = 'PLAYING';
+            });
+            document.getElementById('btn-main-menu').addEventListener('click', () => {
+                document.getElementById('pause-modal').classList.remove('active');
+                gameState = 'MENU';
+                document.getElementById('menu-modal').classList.add('active');
+            });
+
+            // Game Over
+            document.getElementById('btn-retry-seed').addEventListener('click', () => {
+                document.getElementById('gameover-modal').classList.remove('active');
+                initGame(currentSeed);
+                gameState = 'PLAYING';
+            });
+            document.getElementById('btn-retry-new').addEventListener('click', () => {
+                document.getElementById('gameover-modal').classList.remove('active');
+                initGame();
+                gameState = 'PLAYING';
+            });
+
+            // Copiar Semillas
+            document.getElementById('btn-copy-seed').addEventListener('click', () => {
+                navigator.clipboard.writeText(currentSeed.toString());
+                alert('¡Semilla copiada!');
+            });
+            document.getElementById('btn-copy-go-seed').addEventListener('click', () => {
+                navigator.clipboard.writeText(currentSeed.toString());
+                alert('¡Semilla copiada!');
+            });
+
+            // Tamaño Controles Táctiles
+            const settingsControlsSize = document.getElementById('settings-controls-size');
+            const settingsControlsLabel = document.getElementById('settings-controls-label');
+            const settingsMainControlsSize = document.getElementById('settings-main-controls-size');
+            const settingsMainControlsLabel = document.getElementById('settings-main-controls-label');
+            const touchControls = document.getElementById('touch-controls');
+
+            function updateControlsSize(val) {
+                touchControls.style.height = val + 'px';
+                let pct = Math.round((val / 110) * 100) + '%';
+                if (settingsControlsLabel) settingsControlsLabel.innerText = pct;
+                if (settingsMainControlsLabel) settingsMainControlsLabel.innerText = pct;
+                if (settingsControlsSize) settingsControlsSize.value = val;
+                if (settingsMainControlsSize) settingsMainControlsSize.value = val;
+            }
+
+            if (settingsControlsSize) settingsControlsSize.addEventListener('input', (e) => updateControlsSize(e.target.value));
+            if (settingsMainControlsSize) settingsMainControlsSize.addEventListener('input', (e) => updateControlsSize(e.target.value));
+
+            // Eventos Táctiles de Juego
+            const btnLeft = document.getElementById('btn-left');
+            const btnRight = document.getElementById('btn-right');
+            const btnJump = document.getElementById('btn-jump');
+
+            ['touchstart', 'mousedown'].forEach(evt => {
+                btnLeft.addEventListener(evt, (e) => { e.preventDefault(); keys.left = true; });
+                btnRight.addEventListener(evt, (e) => { e.preventDefault(); keys.right = true; });
+                btnJump.addEventListener(evt, (e) => {
+                    e.preventDefault();
+                    executeJump();
+                });
+            });
+
+            ['touchend', 'mouseup', 'mouseleave'].forEach(evt => {
+                btnLeft.addEventListener(evt, (e) => { keys.left = false; });
+                btnRight.addEventListener(evt, (e) => { keys.right = false; });
+            });
+
+            // Teclado
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+                if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') {
+                    executeJump();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+                if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+            });
+
+            // Noticias
+            document.getElementById('btn-open-news').addEventListener('click', async () => {
+                document.getElementById('news-modal').classList.add('active');
+                const adminForm = document.getElementById('admin-news-form');
+                if (currentUser && currentUser.username.toLowerCase() === 'admin') {
+                    adminForm.style.display = 'block';
+                } else {
+                    adminForm.style.display = 'none';
+                }
+                await loadNews();
+            });
+            document.getElementById('close-news').addEventListener('click', () => {
+                document.getElementById('news-modal').classList.remove('active');
+            });
+
+            document.getElementById('btn-publish-news').addEventListener('click', async () => {
+                const title = document.getElementById('news-title-input').value.trim();
+                const content = document.getElementById('news-content-input').value.trim();
+
+                if (!title || !content) {
+                    alert('Escribe título y contenido para la noticia.');
                     return;
                 }
 
-                listElem.innerHTML = '';
-                records.slice(0, 20).forEach((rec, idx) => {
-                    let medal = `#${idx + 1}`;
-                    if (idx === 0) medal = '🥇';
-                    else if (idx === 1) medal = '🥈';
-                    else if (idx === 2) medal = '🥉';
+                try {
+                    if (!window.db) return;
+                    const newDocRef = window.firebaseFns.doc(window.firebaseFns.collection(window.db, "news"));
+                    await window.firebaseFns.setDoc(newDocRef, {
+                        title: title,
+                        content: content,
+                        author: currentUser ? currentUser.username : 'Admin',
+                        timestamp: Date.now()
+                    });
+                    document.getElementById('news-title-input').value = '';
+                    document.getElementById('news-content-input').value = '';
+                    await loadNews();
+                } catch (e) {
+                    console.error("Error publicando noticia:", e);
+                }
+            });
 
-                    const row = document.createElement('div');
-                    row.className = 'bg-gray-800/90 border border-gray-700 rounded-xl p-3 flex justify-between items-center text-xs';
-                    row.innerHTML = `
-                        <div class="flex items-center gap-3">
-                            <span class="font-bold w-6 text-center text-yellow-400">${medal}</span>
-                            <span class="text-white font-medium">${rec.name || 'Anónimo'}</span>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <span class="text-cyan-400 font-bold">${rec.score}m</span>
-                            <span class="text-[9px] text-gray-500 font-mono">Seed: ${rec.seed || '-'}</span>
-                        </div>
-                    `;
-                    listElem.appendChild(row);
-                });
+            async function loadNews() {
+                const container = document.getElementById('news-container');
+                container.innerHTML = '<div style="text-align: center; color: #8fa0c0; padding: 15px; font-size: 8px;">Cargando...</div>';
+                try {
+                    if (!window.db) {
+                        container.innerHTML = '<div style="text-align: center; color: #ff2a6d; padding: 15px; font-size: 8px;">Sin conexión</div>';
+                        return;
+                    }
+                    const q = window.firebaseFns.query(window.firebaseFns.collection(window.db, "news"), window.firebaseFns.orderBy("timestamp", "desc"), window.firebaseFns.limit(10));
+                    const querySnapshot = await window.firebaseFns.getDocs(q);
+
+                    if (querySnapshot.empty) {
+                        container.innerHTML = '<div style="text-align: center; color: #8fa0c0; padding: 15px; font-size: 8px;">No hay noticias aún.</div>';
+                        return;
+                    }
+
+                    let isAdmin = currentUser && currentUser.username.toLowerCase() === 'admin';
+                    let html = '';
+                    querySnapshot.forEach((docSnap) => {
+                        let data = docSnap.data();
+                        let dateStr = new Date(data.timestamp || Date.now()).toLocaleDateString();
+                        html += `
+                            <div class="news-item">
+                                <div class="news-item-title">${data.title || 'Noticia'}</div>
+                                <div class="news-item-date">${dateStr} - por ${data.author || 'Admin'}</div>
+                                <div class="news-item-content">${data.content || ''}</div>
+                                ${isAdmin ? `<button class="news-delete-btn" onclick="window.deleteNews('${docSnap.id}')">Eliminar</button>` : ''}
+                            </div>
+                        `;
+                    });
+                    container.innerHTML = html;
+                } catch (e) {
+                    console.error(e);
+                    container.innerHTML = '<div style="text-align: center; color: #ff2a6d; padding: 15px; font-size: 8px;">Error al cargar noticias.</div>';
+                }
+            }
+
+            window.deleteNews = async function(newsId) {
+                if (confirm('¿Eliminar esta noticia?')) {
+                    try {
+                        await window.firebaseFns.deleteDoc(window.firebaseFns.doc(window.db, "news", newsId));
+                        await loadNews();
+                    } catch (err) {
+                        console.error("Error eliminando noticia:", err);
+                    }
+                }
             };
 
-            document.getElementById('btn-open-leaderboard').addEventListener('click', openLeaderboardModal);
-            document.getElementById('btn-menu-leaderboard').addEventListener('click', openLeaderboardModal);
-            document.getElementById('btn-close-leaderboard').addEventListener('click', () => leaderboardModal.classList.add('hidden'));
-
-            // Settings Menu button
-            document.getElementById('btn-menu-settings').addEventListener('click', () => {
-                if (gameState === 'MENU') {
-                    gameState = 'PAUSED';
-                    pauseSeedDisplay.innerText = '---';
-                    pauseModal.classList.remove('hidden');
-                }
-            });
-
-            // Fullscreen Toggle Logic
-            const btnFullscreen = document.getElementById('btn-fullscreen');
-            
-            function toggleFullscreen() {
-                if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
-                    const docEl = document.documentElement;
-                    if (docEl.requestFullscreen) {
-                        docEl.requestFullscreen();
-                    } else if (docEl.webkitRequestFullscreen) {
-                        docEl.webkitRequestFullscreen();
-                    } else if (docEl.msRequestFullscreen) {
-                        docEl.msRequestFullscreen();
-                    }
-                } else {
-                    if (document.exitFullscreen) {
-                        document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        document.webkitExitFullscreen();
-                    } else if (document.msExitFullscreen) {
-                        document.msExitFullscreen();
-                    }
-                }
-            }
-
-            function updateFullscreenBtnIcon() {
-                if (document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement) {
-                    btnFullscreen.innerText = '🗗';
-                    btnFullscreen.title = 'Salir de pantalla completa';
-                } else {
-                    btnFullscreen.innerText = '⛶';
-                    btnFullscreen.title = 'Pantalla completa';
-                }
-            }
-
-            if (btnFullscreen) {
-                btnFullscreen.addEventListener('click', toggleFullscreen);
-            }
-
-            document.addEventListener('fullscreenchange', updateFullscreenBtnIcon);
-            document.addEventListener('webkitfullscreenchange', updateFullscreenBtnIcon);
-            document.addEventListener('msfullscreenchange', updateFullscreenBtnIcon);
-
-            // Auth Modal Logic
-            let isRegisterMode = true;
-            const authTitle = document.getElementById('auth-title');
-            const authUsernameInput = document.getElementById('auth-username');
-            const authPasswordInput = document.getElementById('auth-password');
+            // Auth toggle y login/register
+            const toggleAuthMode = document.getElementById('toggle-auth-mode');
+            const accountTitle = document.getElementById('account-title');
             const btnSubmitAuth = document.getElementById('btn-submit-auth');
-            const btnToggleAuthMode = document.getElementById('btn-toggle-auth-mode');
-            const authErrorMsg = document.getElementById('auth-error-msg');
+            const accountError = document.getElementById('account-error');
 
-            function updateAuthUI() {
-                authTitle.innerText = isRegisterMode ? 'CREAR CUENTA' : 'INICIAR SESIÓN';
-                btnSubmitAuth.innerText = isRegisterMode ? 'REGISTRAR' : 'ENTRAR';
-                btnToggleAuthMode.innerText = isRegisterMode 
-                    ? '¿Ya tienes cuenta? Inicia sesión aquí' 
-                    : '¿No tienes cuenta? Regístrate aquí';
-                authErrorMsg.classList.add('hidden');
-            }
-
-            document.getElementById('btn-open-auth').addEventListener('click', () => {
-                isRegisterMode = true;
-                updateAuthUI();
-                authModal.classList.remove('hidden');
-            });
-
-            document.getElementById('btn-close-auth').addEventListener('click', () => {
-                authModal.classList.add('hidden');
-            });
-
-            btnToggleAuthMode.addEventListener('click', () => {
-                isRegisterMode = !isRegisterMode;
-                updateAuthUI();
+            toggleAuthMode.addEventListener('click', () => {
+                accountError.innerText = '';
+                if (activeAuthMode === 'register') {
+                    activeAuthMode = 'login';
+                    accountTitle.innerText = 'INICIAR SESIÓN';
+                    btnSubmitAuth.innerText = 'ENTRAR';
+                    toggleAuthMode.innerText = '¿No tienes cuenta? Regístrate aquí';
+                } else {
+                    activeAuthMode = 'register';
+                    accountTitle.innerText = 'CREAR CUENTA';
+                    btnSubmitAuth.innerText = 'REGISTRAR';
+                    toggleAuthMode.innerText = '¿Ya tienes cuenta? Inicia sesión aquí';
+                }
             });
 
             btnSubmitAuth.addEventListener('click', async () => {
-                const username = authUsernameInput.value.trim();
-                const password = authPasswordInput.value.trim();
+                const userField = document.getElementById('acc-user').value.trim();
+                const passField = document.getElementById('acc-pass').value;
 
-                if (!username || !password) {
-                    authErrorMsg.innerText = "Escribe usuario y contraseña.";
-                    authErrorMsg.classList.remove('hidden');
+                if (!userField || userField.length < 3) {
+                    accountError.innerText = 'Usuario min 3 caracteres.';
                     return;
                 }
-                if (username.length < 3) {
-                    authErrorMsg.innerText = "El usuario debe tener al menos 3 caracteres.";
-                    authErrorMsg.classList.remove('hidden');
+                if (!passField || passField.length < 6) {
+                    accountError.innerText = 'Contraseña min 6 caracteres.';
                     return;
                 }
-                if (password.length < 6) {
-                    authErrorMsg.innerText = "La contraseña debe tener al menos 6 caracteres.";
-                    authErrorMsg.classList.remove('hidden');
-                    return;
-                }
-
-                btnSubmitAuth.disabled = true;
-                btnSubmitAuth.innerText = "Conectando...";
-                authErrorMsg.classList.add('hidden');
 
                 try {
-                    await window.cloudAuthLoginOrRegister(username, password, isRegisterMode);
-                    authModal.classList.add('hidden');
-                    authUsernameInput.value = '';
-                    authPasswordInput.value = '';
-                    window.updatePlayerBadgeUI();
+                    if (!window.db) {
+                        accountError.innerText = 'Sin conexión a Firebase.';
+                        return;
+                    }
+
+                    const docRef = window.firebaseFns.doc(window.db, "users", userField);
+                    const docSnap = await window.firebaseFns.getDoc(docRef);
+
+                    if (activeAuthMode === 'register') {
+                        if (docSnap.exists()) {
+                            accountError.innerText = 'El usuario ya existe.';
+                            return;
+                        }
+                        await window.firebaseFns.setDoc(docRef, {
+                            username: userField,
+                            password: passField,
+                            cubito: cubitoStyle,
+                            createdAt: Date.now()
+                        });
+                        currentUser = { username: userField };
+                        localStorage.setItem('guest_user', userField);
+                        document.getElementById('player-welcome').innerText = userField;
+                        document.getElementById('account-modal').classList.remove('active');
+                        document.getElementById('btn-logout').style.display = 'block';
+                    } else {
+                        if (!docSnap.exists()) {
+                            accountError.innerText = 'El usuario no existe.';
+                            return;
+                        }
+                        const data = docSnap.data();
+                        if (data.password !== passField) {
+                            accountError.innerText = 'Contraseña incorrecta.';
+                            return;
+                        }
+                        currentUser = { username: userField };
+                        localStorage.setItem('guest_user', userField);
+                        if (data.cubito) {
+                            cubitoStyle = data.cubito;
+                            localStorage.setItem('cubito_style', JSON.stringify(cubitoStyle));
+                        } else {
+                            cubitoStyle = getRandomCubeStyle();
+                        }
+                        renderMenuPreview();
+                        document.getElementById('player-welcome').innerText = userField;
+                        document.getElementById('account-modal').classList.remove('active');
+                        document.getElementById('btn-logout').style.display = 'block';
+                    }
                 } catch (err) {
-                    authErrorMsg.innerText = err.message || "Error al autenticar. Verifica tus datos.";
-                    authErrorMsg.classList.remove('hidden');
-                } finally {
-                    btnSubmitAuth.disabled = false;
-                    btnSubmitAuth.innerText = isRegisterMode ? 'REGISTRAR' : 'ENTRAR';
+                    console.error(err);
+                    accountError.innerText = 'Error de autenticación.';
                 }
             });
+
+            document.getElementById('btn-logout').addEventListener('click', () => {
+                currentUser = null;
+                let guestName = 'Jugador' + Math.floor(1000 + Math.random() * 9000);
+                localStorage.setItem('guest_user', guestName);
+                cubitoStyle = getRandomCubeStyle();
+                localStorage.setItem('cubito_style', JSON.stringify(cubitoStyle));
+                renderMenuPreview();
+                document.getElementById('player-welcome').innerText = guestName;
+                document.getElementById('btn-logout').style.display = 'none';
+                document.getElementById('settings-modal').classList.remove('active');
+            });
+
+            async function loadLeaderboard() {
+                const container = document.getElementById('leaderboard-container');
+                container.innerHTML = '<div style="text-align: center; color: #8fa0c0; padding: 15px; font-size: 8px;">Cargando...</div>';
+                try {
+                    if (!window.db) {
+                        container.innerHTML = '<div style="text-align: center; color: #ff2a6d; padding: 15px; font-size: 8px;">Sin conexión</div>';
+                        return;
+                    }
+                    const q = window.firebaseFns.query(window.firebaseFns.collection(window.db, "leaderboard"), window.firebaseFns.orderBy("score", "desc"), window.firebaseFns.limit(10));
+                    const querySnapshot = await window.firebaseFns.getDocs(q);
+                    
+                    if (querySnapshot.empty) {
+                        container.innerHTML = '<div style="text-align: center; color: #8fa0c0; padding: 15px; font-size: 8px;">Sin récords aún.</div>';
+                        return;
+                    }
+
+                    container.innerHTML = '';
+                    let rank = 1;
+
+                    querySnapshot.forEach((doc) => {
+                        let data = doc.data();
+                        let nameDisplay = data.username || doc.id || 'Jugador';
+                        let cData = data.cubito || { color: '#ffb700', emoji: '💧' };
+
+                        let itemDiv = document.createElement('div');
+                        itemDiv.className = 'leaderboard-item';
+
+                        let userDiv = document.createElement('div');
+                        userDiv.className = 'leaderboard-item-user';
+
+                        let lbCanvas = document.createElement('canvas');
+                        lbCanvas.width = 20;
+                        lbCanvas.height = 20;
+                        lbCanvas.style.borderRadius = '3px';
+                        let lbCtx = lbCanvas.getContext('2d');
+                        drawCubito(lbCtx, 0, 0, 20, cData.color, cData.emoji);
+
+                        let nameSpan = document.createElement('span');
+                        nameSpan.style.color = '#ffb700';
+                        nameSpan.innerText = `#${rank} ${nameDisplay}`;
+
+                        userDiv.appendChild(lbCanvas);
+                        userDiv.appendChild(nameSpan);
+
+                        let scoreSpan = document.createElement('span');
+                        scoreSpan.style.color = '#00f0ff';
+                        scoreSpan.innerText = `${data.score || 0}m`;
+
+                        itemDiv.appendChild(userDiv);
+                        itemDiv.appendChild(scoreSpan);
+
+                        container.appendChild(itemDiv);
+                        rank++;
+                    });
+                } catch (e) {
+                    console.error(e);
+                    container.innerHTML = '<div style="text-align: center; color: #ff2a6d; padding: 15px; font-size: 8px;">Error al cargar.</div>';
+                }
+            }
+
+            gameLoop();
         });
     </script>
 </body>
